@@ -9,7 +9,8 @@ import { Hud } from './hud.js';
 import { PlayerController } from './player.js';
 import { CameraRigController } from './camera.js';
 
-const renderer = createRenderer();
+const IS_MOBILE = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1;
+const renderer = createRenderer(IS_MOBILE);
 const scene = createScene();
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 25000);
 const listener = new AudioListener();
@@ -26,7 +27,7 @@ let musicLoadStarted = false;
 const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click'];
 
 const player = new PlayerController(loader, scene, PLAYER_CONFIG, PLAY_AREA, listener);
-const starfield = createStarfield(scene);
+const starfield = createStarfield(scene, IS_MOBILE ? 0.45 : 1);
 let planet: THREE.Object3D | null = null;
 let destroyer: THREE.Object3D | null = null;
 const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
@@ -47,9 +48,11 @@ const inputController = createInputController(renderer.domElement, () => player.
 init();
 
 async function init() {
-  setupLights(scene);
+  setupLights(scene, !IS_MOBILE);
   planet = await loadEnvironment(loader, scene, ASSETS_PATH);
-  destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
+  if (!IS_MOBILE) {
+    destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
+  }
   audioLoader.load(`${ASSETS_PATH}/tie-fighter-fire-1.mp3`, buffer => player.setFireSound(buffer));
   loadBackgroundMusic();
   await player.loadModel(
@@ -131,12 +134,15 @@ function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function createRenderer(): THREE.WebGLRenderer {
-  const webgl = new THREE.WebGLRenderer({ antialias: true });
+function createRenderer(isMobile: boolean): THREE.WebGLRenderer {
+  const webgl = new THREE.WebGLRenderer({
+    antialias: !isMobile,
+    powerPreference: isMobile ? 'low-power' : 'high-performance'
+  });
   webgl.setSize(window.innerWidth, window.innerHeight);
-  webgl.setPixelRatio(Math.min(2, window.devicePixelRatio));
+  webgl.setPixelRatio(isMobile ? 1 : Math.min(2, window.devicePixelRatio));
   webgl.outputColorSpace = THREE.SRGBColorSpace;
-  webgl.shadowMap.enabled = true;
+  webgl.shadowMap.enabled = !isMobile;
   document.body.appendChild(webgl.domElement);
   return webgl;
 }

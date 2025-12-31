@@ -6,14 +6,14 @@ export type Starfield = {
   update: (delta: number) => void;
 };
 
-export function setupLights(scene: THREE.Scene): void {
+export function setupLights(scene: THREE.Scene, enableShadows: boolean = true): void {
   scene.add(new THREE.HemisphereLight(0x406080, 0x080810, 0.9));
 
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
   keyLight.position.set(25, 60, 20);
-  keyLight.castShadow = true;
+  keyLight.castShadow = enableShadows;
   keyLight.shadow.bias = -0.0002;
-  keyLight.shadow.mapSize.set(2048, 2048);
+  keyLight.shadow.mapSize.set(enableShadows ? 2048 : 1024, enableShadows ? 2048 : 1024);
   keyLight.shadow.camera.far = 600;
   scene.add(keyLight);
 
@@ -22,8 +22,9 @@ export function setupLights(scene: THREE.Scene): void {
   scene.add(rimLight);
 }
 
-export function createStarfield(scene: THREE.Scene): Starfield {
+export function createStarfield(scene: THREE.Scene, densityScale: number = 1): Starfield {
   const starGroup = new THREE.Group();
+  const density = THREE.MathUtils.clamp(densityScale, 0.2, 1);
 
   const fillShell = (count: number, minRadius: number, maxRadius: number): Float32Array => {
     const positions = new Float32Array(count * 3);
@@ -42,7 +43,7 @@ export function createStarfield(scene: THREE.Scene): Starfield {
   };
 
   const makeLayer = (opts: { count: number; size: number; minRadius: number; maxRadius: number; color: number; opacity: number }) => {
-    const positions = fillShell(opts.count, opts.minRadius, opts.maxRadius);
+    const positions = fillShell(Math.floor(opts.count * density), opts.minRadius, opts.maxRadius);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
