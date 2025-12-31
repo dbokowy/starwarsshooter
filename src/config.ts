@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CameraRig, PlayArea, PlayerConfig } from './types.js';
 
-export const ASSETS_PATH = '/assets';
+export const ASSETS_PATH = `${import.meta.env.BASE_URL}assets`;
 
 export const CAMERA_RIG: CameraRig = {
   cameraOffset: new THREE.Vector3(0, 6, 14),
