@@ -18,10 +18,12 @@ const clock = new THREE.Clock();
 const loader = new GLTFLoader();
 const audioLoader = new AudioLoader();
 const MUSIC_URL = `${ASSETS_PATH}/darth-maul.ogg`;
-let bgMusicEl: HTMLAudioElement | null = null;
-let musicBlobUrl: string | null = null;
+let bgMusicEl: HTMLAudioElement | null = new Audio();
 let musicReady = false;
 let userInteracted = false;
+let pendingPlayRequest = false;
+let musicLoadStarted = false;
+const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click'];
 
 const player = new PlayerController(loader, scene, PLAYER_CONFIG, PLAY_AREA, listener);
 const starfield = createStarfield(scene);
@@ -148,32 +150,65 @@ function createScene(): THREE.Scene {
 
 function playBackgroundMusic() {
   if (!musicReady || !bgMusicEl) return;
-  bgMusicEl.play().catch(err => console.error('Music play error', err));
+  bgMusicEl.muted = false;
+  bgMusicEl.play()
+    .then(() => {
+      removeGestureListeners();
+    })
+    .catch(err => console.error('Music play error', err));
 }
 
 const resumeMusicOnInteract = () => {
   userInteracted = true;
+  pendingPlayRequest = true;
+  if (!musicReady) loadBackgroundMusic();
   playBackgroundMusic();
-  window.removeEventListener('pointerdown', resumeMusicOnInteract);
 };
-window.addEventListener('pointerdown', resumeMusicOnInteract);
+
+function addGestureListeners() {
+  gestureEvents.forEach(evt => {
+    window.addEventListener(evt, resumeMusicOnInteract, { passive: true });
+  });
+}
+
+function removeGestureListeners() {
+  gestureEvents.forEach(evt => {
+    window.removeEventListener(evt, resumeMusicOnInteract);
+  });
+}
+
+addGestureListeners();
 
 function loadBackgroundMusic() {
-  fetch(MUSIC_URL)
-    .then(res => {
-      if (!res.ok) throw new Error(`Music fetch failed: ${res.status}`);
-      return res.blob();
-    })
-    .then(blob => {
-      if (musicBlobUrl) URL.revokeObjectURL(musicBlobUrl);
-      musicBlobUrl = URL.createObjectURL(blob);
-      bgMusicEl = new Audio(musicBlobUrl);
-      bgMusicEl.loop = true;
-      bgMusicEl.volume = 0.7;
+  if (musicLoadStarted) return;
+  musicLoadStarted = true;
+  if (!bgMusicEl) {
+    bgMusicEl = new Audio();
+  }
+  bgMusicEl.loop = true;
+  bgMusicEl.volume = 0.7;
+  bgMusicEl.preload = 'auto';
+  // inline flag matters for iOS/Safari autoplay after user gesture
+  // @ts-ignore
+  bgMusicEl.playsInline = true;
+  bgMusicEl.src = MUSIC_URL;
+  bgMusicEl.load();
+  bgMusicEl.addEventListener(
+    'canplaythrough',
+    () => {
       musicReady = true;
-      if (userInteracted) playBackgroundMusic();
-    })
-    .catch(err => console.error('Music load error', err));
+      if (userInteracted || pendingPlayRequest) {
+        pendingPlayRequest = false;
+        playBackgroundMusic();
+      }
+    },
+    { once: true }
+  );
+
+  if (userInteracted || pendingPlayRequest) {
+    pendingPlayRequest = false;
+    playBackgroundMusic();
+  }
 }
 
 function hideLoading() {
