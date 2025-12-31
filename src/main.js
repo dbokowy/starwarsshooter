@@ -25,8 +25,8 @@ scene.add(player);
 player.position.set(0, 0, 40);
 
 let playerModel = null;
-const cameraOffset = new THREE.Vector3(0, 2.7, 14);
-const lookOffset = new THREE.Vector3(0, 1.5, -14);
+const cameraOffset = new THREE.Vector3(0, 6, 14); // higher to view ship from above (~10° more)
+const lookOffset = new THREE.Vector3(0, 2.3, -14);
 const smoothedLook = new THREE.Vector3();
 const engineFlames = [];
 
@@ -36,7 +36,7 @@ let lastShot = 0;
 
 const maxHealth = 100;
 let health = maxHealth;
-const baseSpeed = 46;
+const baseSpeed = 4.6; // reduced to 10% of previous starting speed
 const strafeSpeed = 18;
 const boostMultiplier = 1.8;
 let currentSpeed = baseSpeed;
@@ -192,11 +192,13 @@ function loadEnvironment() {
 }
 
 function loadPlayer() {
-  loadModel(`${ASSETS}/x-wing/scene.gltf`)
+  loadModel(`${ASSETS}/x-wing-thruster-glow/scene.gltf`)
     .then(model => {
       playerModel = model;
-      model.scale.setScalar(0.5);
-      model.rotation.y = Math.PI;
+      model.scale.setScalar(0.9337123125); // another ~10% smaller
+      model.rotation.set(0.1745329, Math.PI / 12, -Math.PI / 18); // pitch ~10° down, yaw ~15° left, roll ~10° right
+      model.userData.baseRotation = model.rotation.clone(); // keep pristine orientation for sway offsets
+      model.position.y = -2; // drop the model further (~10%) relative to player
       player.add(model);
       createEngineFlames();
     })
@@ -303,6 +305,7 @@ function update() {
   updateBullets(delta);
   updateCamera(delta);
   updateEngineFlames(delta);
+  updateModelSway();
   updateHud();
 
   if (planet) planet.rotation.y += delta * 0.05;
@@ -368,24 +371,26 @@ function updateCamera(delta) {
 }
 
 function createEngineFlames() {
-  const makeFlameTexture = () => {
-    const size = 64;
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    const grad = ctx.createRadialGradient(size / 2, size / 2, 4, size / 2, size / 2, size / 2);
-    grad.addColorStop(0, 'rgba(255,255,230,1)');
-    grad.addColorStop(0.35, 'rgba(255,191,128,0.9)');
-    grad.addColorStop(0.7, 'rgba(255,120,70,0.45)');
-    grad.addColorStop(1, 'rgba(255,120,70,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  };
+  const coreMaterial = new THREE.MeshBasicMaterial({
+    color: 0xfff2cc,
+    transparent: true,
+    opacity: 0.92,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
 
-  const flameTexture = makeFlameTexture();
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff7547,
+    transparent: true,
+    opacity: 0.34,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+
+  const coreGeometry = new THREE.ConeGeometry(0.38, 2.6, 18, 1, true);
+  const glowGeometry = new THREE.ConeGeometry(0.75, 4.2, 18, 1, true);
 
   const offsets = [
     new THREE.Vector3(1.4, 0.3605, 2.244), // upper right engine (y +3%, z +2%)
@@ -395,86 +400,66 @@ function createEngineFlames() {
   ];
 
   offsets.forEach(offset => {
-    const particleCount = 140;
-    const positions = new Float32Array(particleCount * 3);
-    const velocities = new Float32Array(particleCount);
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const flame = new THREE.Group();
+    flame.rotation.x = -Math.PI / 2;
+    flame.userData.offset = offset.clone();
+    flame.userData.baseRadius = 0.55;
+    flame.userData.baseLength = 1;
 
-    const material = new THREE.PointsMaterial({
-      map: flameTexture,
-      color: 0xffc78a,
-      size: 0.35,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    });
+    const core = new THREE.Mesh(coreGeometry, coreMaterial.clone());
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial.clone());
+    glow.position.y = 0.15; // trail glow slightly behind core
 
-    const emitter = new THREE.Points(geometry, material);
-    emitter.rotation.x = -Math.PI / 2; // align to ship -Z
-    emitter.userData.offset = offset.clone();
-    emitter.userData.velocities = velocities;
-    emitter.userData.baseRadius = 0.65;
-    emitter.userData.length = 3.2;
+    flame.add(glow);
+    flame.add(core);
 
-    const randomizeParticle = idx => {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = emitter.userData.baseRadius * Math.pow(Math.random(), 0.5);
-      const zSpread = emitter.userData.length * Math.random() * 0.4; // near nozzle
-      positions[idx * 3] = Math.cos(angle) * radius;
-      positions[idx * 3 + 1] = Math.sin(angle) * radius;
-      positions[idx * 3 + 2] = -zSpread;
-      velocities[idx] = THREE.MathUtils.randFloat(1, 1.8);
-    };
-
-    for (let i = 0; i < particleCount; i++) randomizeParticle(i);
-
-    emitter.userData.randomizeParticle = randomizeParticle;
-
-    player.add(emitter);
-    engineFlames.push(emitter);
+    player.add(flame);
+    engineFlames.push(flame);
   });
 }
 
 function updateEngineFlames(delta) {
   if (!engineFlames.length) return;
 
-  const time = performance.now() * 0.0015;
+  const time = performance.now() * 0.002;
   const boostNorm = THREE.MathUtils.clamp(
     (currentSpeed - baseSpeed) / (baseSpeed * (boostMultiplier - 1)),
     0,
     1
   );
   const flare = 0.25 + boostNorm * 0.95;
-  const speedMul = THREE.MathUtils.lerp(14, 32, flare);
 
-  engineFlames.forEach((emitter, idx) => {
-    emitter.position.copy(emitter.userData.offset);
+  engineFlames.forEach((flame, idx) => {
+    flame.position.copy(flame.userData.offset);
 
-    const positions = emitter.geometry.attributes.position.array;
-    const velocities = emitter.userData.velocities;
-    const length = emitter.userData.length;
-    const randomizeParticle = emitter.userData.randomizeParticle;
+    const flicker = 1 + Math.sin(time * 1.8 + idx * 0.7) * 0.06 + Math.random() * 0.04;
+    const lengthScale = THREE.MathUtils.lerp(1.1, 3.4, flare) * flicker;
+    const radiusScale = THREE.MathUtils.lerp(0.65, 1.6, flare) * flicker;
+    flame.scale.set(
+      flame.userData.baseRadius * radiusScale,
+      flame.userData.baseLength * lengthScale,
+      flame.userData.baseRadius * radiusScale
+    );
 
-    for (let i = 0; i < velocities.length; i++) {
-      const pIndex = i * 3;
-      positions[pIndex] += (Math.random() - 0.5) * 0.03; // subtle sideways flicker
-      positions[pIndex + 1] += (Math.random() - 0.5) * 0.03;
-      positions[pIndex + 2] -= velocities[i] * speedMul * delta;
-
-      if (positions[pIndex + 2] < -length) {
-        randomizeParticle(i);
-      }
-    }
-
-    emitter.geometry.attributes.position.needsUpdate = true;
-
-    const flicker = 1 + Math.sin(time * 2.4 + idx * 0.8) * 0.08;
-    emitter.material.size = THREE.MathUtils.lerp(0.22, 0.5, flare) * flicker;
-    emitter.material.opacity = THREE.MathUtils.lerp(0.4, 0.95, flare);
+    const targetOpacity = THREE.MathUtils.lerp(0.18, 0.85, flare);
+    flame.children.forEach(child => {
+      child.material.opacity = THREE.MathUtils.lerp(child.material.opacity, targetOpacity, 0.2);
+    });
   });
+}
+
+function updateModelSway() {
+  if (!playerModel || !playerModel.userData.baseRotation) return;
+
+  const t = clock.getElapsedTime();
+  const throttle = THREE.MathUtils.clamp(currentSpeed / (baseSpeed * boostMultiplier), 0, 1);
+  const throttleRamp = Math.pow(throttle, 2); // stronger sway as speed/acceleration rises
+  const pitchAmp = 0.01 + 0.06 * throttleRamp; // low base, steeper growth
+  const rollAmp = 0.015 + 0.08 * throttleRamp;
+
+  playerModel.rotation.x = playerModel.userData.baseRotation.x + Math.sin(t * 2.1) * pitchAmp;
+  playerModel.rotation.y = playerModel.userData.baseRotation.y;
+  playerModel.rotation.z = playerModel.userData.baseRotation.z + Math.sin(t * 1.6 + 0.8) * rollAmp;
 }
 
 function updateHud() {
@@ -487,7 +472,7 @@ function updateHud() {
     const minSpeed = baseSpeed;
     const maxSpeed = baseSpeed * boostMultiplier;
     const norm = THREE.MathUtils.clamp((currentSpeed - minSpeed) / (maxSpeed - minSpeed), 0, 1);
-    const adjusted = 0.3 + norm * 0.7; // start at 30%, max 100%
+    const adjusted = 0.1 + norm * 0.9; // start at 10%, max 100%
     speedBar.style.width = `${adjusted * 100}%`;
   }
 }
