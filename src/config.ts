@@ -23,15 +23,15 @@ export const PLAYER_CONFIG: PlayerConfig = {
   boostMultiplier: 1.8,
   maxHealth: 100,
   muzzleOffsets: [
-    new THREE.Vector3(1.6, 0.15, -1.8),
-    new THREE.Vector3(1.6, -0.35, -1.8),
-    new THREE.Vector3(-1.6, 0.15, -1.8),
-    new THREE.Vector3(-1.6, -0.35, -1.8)
+    new THREE.Vector3(6.6, 1.4, -3.2),   // upper right wingtip
+    new THREE.Vector3(6.6, -1.4, -3.2),  // lower right wingtip
+    new THREE.Vector3(-5.6, 0.9, -3.2),  // upper left wingtip
+    new THREE.Vector3(-5.6, -0.9, -3.2)  // lower left wingtip
   ],
   flameOffsets: [
-    new THREE.Vector3(-0.5, 2.0, 5.5),
-    new THREE.Vector3(-0.5, -0.3, 5.5),
-    new THREE.Vector3(2.5, 2.0, 5.5),
-    new THREE.Vector3(2.5, -0.3, 5.5)
+    new THREE.Vector3(-0.5, 2.0, 5.3),
+    new THREE.Vector3(-0.5, -0.3, 5.3),
+    new THREE.Vector3(2.5, 2.0, 5.WA3),
+    new THREE.Vector3(2.5, -0.3, 5.3)
   ]
 };

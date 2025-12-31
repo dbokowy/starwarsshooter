@@ -28,8 +28,13 @@ export class EngineFlames {
       side: THREE.DoubleSide
     });
 
-    this.coreGeometry = new THREE.ConeGeometry(0.38, 2.6, 18, 1, true);
-    this.glowGeometry = new THREE.ConeGeometry(0.75, 4.2, 18, 1, true);
+    const coreHeight = 2.6;
+    const glowHeight = 4.2;
+    this.coreGeometry = new THREE.ConeGeometry(0.38, coreHeight, 18, 1, true);
+    this.glowGeometry = new THREE.ConeGeometry(0.75, glowHeight, 18, 1, true);
+    // Move origin to the base so scaling only extends backward.
+    this.coreGeometry.translate(0, coreHeight / 2, 0);
+    this.glowGeometry.translate(0, glowHeight / 2, 0);
   }
 
   attach(): void {
@@ -68,10 +73,8 @@ export class EngineFlames {
         flame.userData.baseRadius * radiusScale
       );
 
-      // shift backward so growth extends behind the nozzle
+      // keep origin at nozzle; with base-translated geometry, scaling now extends only backward
       flame.position.copy(flame.userData.offset);
-      const backShift = (lengthScale - 1) * flame.userData.baseLength * 0.5;
-      flame.translateZ(-backShift);
 
       const targetOpacity = THREE.MathUtils.lerp(0.18, 0.85, flare);
       flame.children.forEach(child => {

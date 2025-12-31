@@ -86,19 +86,19 @@ export class PlayerController {
     if (now - this.lastShot < 160) return;
     this.lastShot = now;
 
-    const coreGeometry = new THREE.BoxGeometry(0.08, 0.08, 3.6);
-    const glowGeometry = new THREE.BoxGeometry(0.18, 0.18, 3.6);
+    const coreGeometry = new THREE.BoxGeometry(0.12, 0.12, 4.8);
+    const glowGeometry = new THREE.BoxGeometry(0.28, 0.28, 5.2);
     const coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff4d4d,
+      color: 0xff6a6a,
       transparent: true,
-      opacity: 0.95,
+      opacity: 1,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
     const glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffb194,
+      color: 0xe81607,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.65,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
