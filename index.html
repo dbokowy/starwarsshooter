@@ -1,0 +1,33 @@
+﻿<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Star Wars Space Shooter</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+</head>
+<body>
+  <div id="crosshair"></div>
+  <div id="hud">
+    <div class="bar bar-shield">
+      <div class="bar-head">
+        <span class="label">Tarcze</span>
+        <span class="sub">Deflektory</span>
+      </div>
+      <div class="bar-track">
+        <div id="health-bar" class="bar-fill"></div>
+      </div>
+    </div>
+    <div class="bar bar-speed">
+      <div class="bar-head">
+        <span class="label">Predkosc</span>
+        <span class="sub">Booster</span>
+      </div>
+      <div class="bar-track">
+        <div id="speed-bar" class="bar-fill speed"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
