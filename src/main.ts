@@ -35,6 +35,8 @@ const hud = new Hud({
 });
 const crosshairEl = document.getElementById('crosshair') as HTMLElement | null;
 const loadingEl = document.getElementById('loading') as HTMLElement | null;
+const controlsModal = document.getElementById('controls-modal') as HTMLElement | null;
+const controlsCloseBtn = document.getElementById('controls-close') as HTMLButtonElement | null;
 const raycaster = new THREE.Raycaster();
 
 const smoothedLook = new THREE.Vector3();
@@ -60,6 +62,7 @@ async function init() {
   window.addEventListener('resize', onResize);
   onResize();
   renderer.setAnimationLoop(update);
+  showControlsModal();
 }
 
 function update() {
@@ -176,4 +179,12 @@ function loadBackgroundMusic() {
 function hideLoading() {
   if (!loadingEl) return;
   loadingEl.classList.add('hidden');
+}
+
+function showControlsModal() {
+  if (!controlsModal || !controlsCloseBtn) return;
+  controlsModal.classList.remove('hidden');
+  controlsCloseBtn.addEventListener('click', () => {
+    controlsModal.classList.add('hidden');
+  });
 }
