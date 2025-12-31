@@ -6,6 +6,7 @@ import { createInputController } from './controls.js';
 import { createStarfield, loadEnvironment, setupLights } from './environment.js';
 import { Hud } from './hud.js';
 import { PlayerController } from './player.js';
+import { CameraRigController } from './camera.js';
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -16,6 +17,7 @@ const loader = new GLTFLoader();
 const player = new PlayerController(loader, scene, PLAYER_CONFIG, PLAY_AREA);
 const starfield = createStarfield(scene);
 let planet: THREE.Object3D | null = null;
+const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
 
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
@@ -62,12 +64,24 @@ function update() {
 }
 
 function updateCamera() {
-  const desiredPosition = CAMERA_RIG.cameraOffset.clone().applyQuaternion(player.root.quaternion).add(player.root.position);
+  const rigOffsets = cameraRigController.getOffsets();
+  const throttle = THREE.MathUtils.clamp(player.currentSpeed / (PLAYER_CONFIG.baseSpeed * PLAYER_CONFIG.boostMultiplier), 0, 1);
+
+  // Pull camera back up to ~70% farther at max throttle.
+  const cameraPullback = THREE.MathUtils.lerp(1, 1.7, throttle);
+  const offset = rigOffsets.cameraOffset.clone().multiplyScalar(cameraPullback);
+
+  const desiredPosition = offset.applyQuaternion(player.root.quaternion).add(player.root.position);
   camera.position.lerp(desiredPosition, 0.1);
 
-  const lookTarget = CAMERA_RIG.lookOffset.clone().applyQuaternion(player.root.quaternion).add(player.root.position);
+  const lookTarget = rigOffsets.lookOffset.clone().applyQuaternion(player.root.quaternion).add(player.root.position);
   smoothedLook.lerp(lookTarget, 0.2);
   camera.lookAt(smoothedLook);
+
+  // Blur kicks in only past 70% throttle.
+  const blurFactor = THREE.MathUtils.clamp((throttle - 0.8) / 0.2, 0, 1);
+  const blurStrength = THREE.MathUtils.lerp(0, 2.5, blurFactor);
+  renderer.domElement.style.filter = `blur(${blurStrength}px)`;
 }
 
 function onResize() {
