@@ -19,18 +19,28 @@ export class PlayerController {
   readonly bullets: Bullet[] = [];
   private lastShot = 0;
   private readonly engineFlames: EngineFlames;
+  private fireBuffer: AudioBuffer | null = null;
+  private overboostBudgetMs = 8000; // time budget for the top 20% boost
+  private overboostCooldownMs = 60000;
+  private overboostRemainingMs = 8000;
+  private overboostLockedUntil = 0;
 
   constructor(
     private readonly loader: GLTFLoader,
     private readonly scene: THREE.Scene,
     private readonly config: PlayerConfig,
-    private readonly playArea: PlayArea
+    private readonly playArea: PlayArea,
+    private readonly listener: THREE.AudioListener
   ) {
     this.currentSpeed = config.baseSpeed;
     this.health = config.maxHealth;
     this.engineFlames = new EngineFlames(this.root, config.flameOffsets);
     this.root.position.set(0, 0, 40);
     this.scene.add(this.root);
+  }
+
+  setFireSound(buffer: AudioBuffer): void {
+    this.fireBuffer = buffer;
   }
 
   async loadModel(path: string, rotation: THREE.Euler, scale: number, positionOffset: THREE.Vector3 = new THREE.Vector3(0, 0, 0)): Promise<void> {
@@ -41,7 +51,7 @@ export class PlayerController {
     model.userData.baseRotation = model.rotation.clone();
     model.position.copy(positionOffset);
     this.root.add(model);
-    this.engineFlames.attach();
+    this.engineFlames.attach(); // keep previous relative offsets (parented to root)
   }
 
   update(delta: number, input: InputState): void {
@@ -71,14 +81,7 @@ export class PlayerController {
 
   updateModelSway(time: number): void {
     if (!this.model || !this.model.userData.baseRotation) return;
-    const throttle = THREE.MathUtils.clamp(this.currentSpeed / (this.config.baseSpeed * this.config.boostMultiplier), 0, 1);
-    const throttleRamp = Math.pow(throttle, 2);
-    const pitchAmp = 0.01 + 0.06 * throttleRamp;
-    const rollAmp = 0.015 + 0.08 * throttleRamp;
-
-    this.model.rotation.x = this.model.userData.baseRotation.x + Math.sin(time * 2.1) * pitchAmp;
-    this.model.rotation.y = this.model.userData.baseRotation.y;
-    this.model.rotation.z = this.model.userData.baseRotation.z + Math.sin(time * 1.6 + 0.8) * rollAmp;
+    this.model.rotation.copy(this.model.userData.baseRotation);
   }
 
   shoot(now: number): void {
@@ -119,6 +122,13 @@ export class PlayerController {
 
       this.bullets.push({ mesh: laser, velocity, life: 2 });
       this.scene.add(laser);
+
+      if (this.fireBuffer) {
+        const laserSound = new THREE.Audio(this.listener);
+        laserSound.setBuffer(this.fireBuffer);
+        laserSound.setVolume(0.6);
+        laserSound.play();
+      }
     });
   }
 
@@ -142,7 +152,31 @@ export class PlayerController {
   }
 
   private updateSpeed(delta: number, input: InputState): void {
-    const targetSpeed = this.config.baseSpeed * (input.boost ? this.config.boostMultiplier : 1);
+    const now = performance.now();
+    const maxBoost = this.config.boostMultiplier;
+    const regularBoost = 1 + (maxBoost - 1) * 0.8; // bottom 80% of boost is unlimited
+
+    let boostFactor = 1;
+    if (input.boost) {
+      const lockActive = now < this.overboostLockedUntil;
+
+      if (!lockActive && this.overboostRemainingMs > 0) {
+        boostFactor = maxBoost; // allow top 20% while budget lasts
+        this.overboostRemainingMs = Math.max(0, this.overboostRemainingMs - delta * 1000);
+        if (this.overboostRemainingMs === 0) {
+          this.overboostLockedUntil = now + this.overboostCooldownMs;
+        }
+      } else {
+        boostFactor = regularBoost; // stay below top 20%
+      }
+    } else {
+      const lockExpired = now >= this.overboostLockedUntil;
+      if (lockExpired && this.overboostRemainingMs === 0) {
+        this.overboostRemainingMs = this.overboostBudgetMs; // recharge after cooldown
+      }
+    }
+
+    const targetSpeed = this.config.baseSpeed * boostFactor;
     const accelRate = 0.75;
     const baseSmoothing = 1 - Math.exp(-accelRate * delta);
     const easeOut = 1 - Math.pow(1 - baseSmoothing, 2.2);

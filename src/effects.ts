@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export class EngineFlames {
-  private readonly parent: THREE.Object3D;
+  private parent: THREE.Object3D;
   private readonly flames: THREE.Group[] = [];
   private readonly coreMaterial: THREE.MeshBasicMaterial;
   private readonly glowMaterial: THREE.MeshBasicMaterial;
@@ -37,7 +37,10 @@ export class EngineFlames {
     this.glowGeometry.translate(0, glowHeight / 2, 0);
   }
 
-  attach(): void {
+  attach(parent?: THREE.Object3D): void {
+    if (parent) {
+      this.parent = parent;
+    }
     this.offsets.forEach(offset => {
       const flame = new THREE.Group();
       flame.rotation.x = Math.PI / 2; // point exhaust backward (-Z in ship space)
@@ -45,9 +48,14 @@ export class EngineFlames {
       flame.userData.baseRadius = 0.22; // doubled base radius for wider exhaust
       flame.userData.baseLength = 0.2;
 
-      const core = new THREE.Mesh(this.coreGeometry, this.coreMaterial.clone());
-      const glow = new THREE.Mesh(this.glowGeometry, this.glowMaterial.clone());
+      const coreMaterial = this.coreMaterial.clone();
+      const glowMaterial = this.glowMaterial.clone();
+      const core = new THREE.Mesh(this.coreGeometry, coreMaterial);
+      const glow = new THREE.Mesh(this.glowGeometry, glowMaterial);
       glow.position.y = 0.15; // trail glow slightly behind core
+
+      core.userData.baseColor = coreMaterial.color.clone();
+      glow.userData.baseColor = glowMaterial.color.clone();
 
       flame.add(glow);
       flame.add(core);
@@ -81,6 +89,11 @@ export class EngineFlames {
         if (child instanceof THREE.Mesh && child.material && 'opacity' in child.material) {
           const material = child.material as THREE.Material & { opacity: number };
           material.opacity = THREE.MathUtils.lerp(material.opacity, targetOpacity, 0.2);
+
+          const boostHeat = THREE.MathUtils.clamp((boostNorm - 0.8) / 0.2, 0, 1);
+          const baseColor = (child.userData.baseColor as THREE.Color) ?? material.color.clone();
+          const hotColor = child === flame.children[0] ? new THREE.Color(0xff5a3c) : new THREE.Color(0xff2a1a);
+          material.color.lerpColors(baseColor, hotColor, boostHeat);
         }
       });
     });

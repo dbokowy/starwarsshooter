@@ -17,6 +17,7 @@ body {
   background: radial-gradient(ellipse at 40% 30%, #0d1b2a 0%, #01030a 60%);
   color: var(--text);
   font-family: 'Segoe UI', Tahoma, sans-serif;
+  --accent: #5ecbff;
 }
 
 canvas {
@@ -27,38 +28,16 @@ canvas {
 
 #crosshair {
   position: fixed;
-  top: 50%;
+  top: 40%; /* adjusted to sit 5% lower for convergence */
   left: 50%;
-  width: 34px;
-  height: 34px;
+  width: 36px; /* ~30% larger for visibility */
+  height: 36px;
   transform: translate(-50%, -50%);
-  border: 1px solid var(--accent);
-  border-radius: 50%;
   pointer-events: none;
-  box-shadow: 0 0 10px rgba(74, 230, 255, 0.6);
-}
-
-#crosshair::before,
-#crosshair::after {
-  content: '';
-  position: absolute;
-  background: var(--accent);
-}
-
-#crosshair::before {
-  left: 50%;
-  top: 7px;
-  width: 1px;
-  height: 20px;
-  transform: translateX(-50%);
-}
-
-#crosshair::after {
-  top: 50%;
-  left: 7px;
-  height: 1px;
-  width: 20px;
-  transform: translateY(-50%);
+  z-index: 20;
+  background: center / contain no-repeat
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'><defs><linearGradient id='g' x1='0%' y1='0%' x2='0%' y2='100%'><stop offset='0%' stop-color='%230bd8ff'/><stop offset='100%' stop-color='%2300a0d1'/></linearGradient></defs><g fill='none' stroke='url(%23g)' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' filter='url(%23f)'><path d='M48 10 L12 74 H84 Z'/><path d='M48 10 l-5 10' /><path d='M48 10 l5 10' /><path d='M12 74 l10 -5' /><path d='M12 74 l10 5' /><path d='M84 74 l-10 -5' /><path d='M84 74 l-10 5' /></g><filter id='f'><feGaussianBlur stdDeviation='1.2' result='blur'/><feMerge><feMergeNode in='blur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></svg>");
+  filter: drop-shadow(0 0 8px rgba(11, 216, 255, 0.7));
 }
 
 #hud {

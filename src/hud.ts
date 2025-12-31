@@ -23,5 +23,9 @@ export class Hud {
     const norm = THREE.MathUtils.clamp((currentSpeed - minSpeed) / (maxSpeed - minSpeed), 0, 1);
     const adjusted = 0.1 + norm * 0.9; // start at 10%, max 100%
     this.speedBar.style.width = `${adjusted * 100}%`;
+
+    const isOverboost = norm >= 0.8;
+    this.speedBar.style.setProperty('--accent', isOverboost ? '#ff513a' : 'var(--speed-accent)');
+    this.speedBar.style.setProperty('--glow', isOverboost ? 'rgba(255, 81, 58, 0.55)' : 'rgba(255, 123, 84, 0.4)');
   }
 }

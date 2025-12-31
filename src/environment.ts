@@ -96,9 +96,35 @@ export function loadModel(loader: GLTFLoader, path: string): Promise<THREE.Objec
 export async function loadEnvironment(loader: GLTFLoader, scene: THREE.Scene, assetsPath: string): Promise<THREE.Object3D | null> {
   try {
     const model = await loadModel(loader, `${assetsPath}/planet_of_phoenix/scene.gltf`);
-    model.scale.setScalar(80);
-    model.position.set(-1200, -240, -10000);
+    model.scale.setScalar(2646); // half the previous size
+    model.position.set(0, -2000, -12000); // keep distance, smaller apparent size
     model.rotation.y = Math.PI * 0.2;
+    model.traverse(obj => {
+      if ('material' in obj && obj.material) {
+        const mat = obj.material as THREE.Material & { fog?: boolean };
+        mat.fog = false; // keep planet clear through scene fog
+      }
+    });
+    scene.add(model);
+    return model;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+export async function loadStarDestroyer(loader: GLTFLoader, scene: THREE.Scene, assetsPath: string): Promise<THREE.Object3D | null> {
+  try {
+    const model = await loadModel(loader, `${assetsPath}/destructor_pesado_imperial_isd_1/scene.gltf`);
+    model.scale.setScalar(30); // ~1/30 of original planet-relative size
+    model.position.set(20000, -120, 7000); // ~30x farther than initial placement
+    model.rotation.y = -Math.PI / 8;
+    model.traverse(obj => {
+      if ('material' in obj && obj.material) {
+        const mat = obj.material as THREE.Material & { fog?: boolean };
+        mat.fog = false;
+      }
+    });
     scene.add(model);
     return model;
   } catch (error) {

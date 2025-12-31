@@ -1,9 +1,10 @@
 import './style.css';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { AudioLoader, AudioListener } from 'three';
 import { CAMERA_RIG, PLAY_AREA, PLAYER_CONFIG, ASSETS_PATH } from './config.js';
 import { createInputController } from './controls.js';
-import { createStarfield, loadEnvironment, setupLights } from './environment.js';
+import { createStarfield, loadEnvironment, loadStarDestroyer, setupLights } from './environment.js';
 import { Hud } from './hud.js';
 import { PlayerController } from './player.js';
 import { CameraRigController } from './camera.js';
@@ -11,18 +12,29 @@ import { CameraRigController } from './camera.js';
 const renderer = createRenderer();
 const scene = createScene();
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 25000);
+const listener = new AudioListener();
+camera.add(listener);
 const clock = new THREE.Clock();
 const loader = new GLTFLoader();
+const audioLoader = new AudioLoader();
+const MUSIC_URL = `${ASSETS_PATH}/darth-maul.ogg`;
+let bgMusicEl: HTMLAudioElement | null = null;
+let musicBlobUrl: string | null = null;
+let musicReady = false;
+let userInteracted = false;
 
-const player = new PlayerController(loader, scene, PLAYER_CONFIG, PLAY_AREA);
+const player = new PlayerController(loader, scene, PLAYER_CONFIG, PLAY_AREA, listener);
 const starfield = createStarfield(scene);
 let planet: THREE.Object3D | null = null;
+let destroyer: THREE.Object3D | null = null;
 const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
 
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
   speedBar: document.getElementById('speed-bar')
 });
+const crosshairEl = document.getElementById('crosshair') as HTMLElement | null;
+const raycaster = new THREE.Raycaster();
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
@@ -32,6 +44,9 @@ init();
 async function init() {
   setupLights(scene);
   planet = await loadEnvironment(loader, scene, ASSETS_PATH);
+  destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
+  audioLoader.load(`${ASSETS_PATH}/tie-fighter-fire-1.mp3`, buffer => player.setFireSound(buffer));
+  loadBackgroundMusic();
   await player.loadModel(
     `${ASSETS_PATH}/x-wing-thruster-glow/scene.gltf`,
     new THREE.Euler(0.1745329, Math.PI / 12, -Math.PI / 18),
@@ -55,7 +70,8 @@ function update() {
   player.updateFlames(elapsed * 2); // match prior timing scale
   player.updateModelSway(elapsed);
   starfield.update(delta);
-  if (planet) planet.rotation.y += delta * 0.05;
+  if (planet) planet.rotation.y += delta * 0.005; // slower spin for backdrop planet
+  updateCrosshair();
 
   hud.updateHealth(player.health, PLAYER_CONFIG.maxHealth);
   hud.updateSpeed(player.currentSpeed, PLAYER_CONFIG.baseSpeed, PLAYER_CONFIG.boostMultiplier);
@@ -68,7 +84,9 @@ function updateCamera() {
   const throttle = THREE.MathUtils.clamp(player.currentSpeed / (PLAYER_CONFIG.baseSpeed * PLAYER_CONFIG.boostMultiplier), 0, 1);
 
   // Pull camera back up to ~70% farther at max throttle.
-  const cameraPullback = THREE.MathUtils.lerp(1, 1.7, throttle);
+  const basePullback = THREE.MathUtils.lerp(1, 1.7, throttle);
+  const topSegment = THREE.MathUtils.clamp((throttle - 0.8) / 0.2, 0, 1);
+  const cameraPullback = THREE.MathUtils.lerp(basePullback, basePullback * 2, topSegment); // double effect in last 20%
   const offset = rigOffsets.cameraOffset.clone().multiplyScalar(cameraPullback);
 
   const desiredPosition = offset.applyQuaternion(player.root.quaternion).add(player.root.position);
@@ -78,10 +96,26 @@ function updateCamera() {
   smoothedLook.lerp(lookTarget, 0.2);
   camera.lookAt(smoothedLook);
 
-  // Blur kicks in only past 70% throttle.
-  const blurFactor = THREE.MathUtils.clamp((throttle - 0.8) / 0.2, 0, 1);
-  const blurStrength = THREE.MathUtils.lerp(0, 2.5, blurFactor);
-  renderer.domElement.style.filter = `blur(${blurStrength}px)`;
+  // Blur disabled for clarity at high speed.
+  renderer.domElement.style.filter = '';
+}
+
+function updateCrosshair() {
+  if (!crosshairEl) return;
+  // Cast forward from camera to a distant plane to position the crosshair
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(forward, camera.position.clone().add(forward.multiplyScalar(100)));
+
+  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const point = raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+  if (!point) return;
+
+  const proj = point.project(camera);
+  const x = ((proj.x + 1) / 2) * 100;
+  const y = ((-proj.y + 1) / 2) * 100;
+  crosshairEl.style.left = `${x}%`;
+  crosshairEl.style.top = `${y}%`;
 }
 
 function onResize() {
@@ -105,4 +139,34 @@ function createScene(): THREE.Scene {
   newScene.background = new THREE.Color(0x02040a);
   newScene.fog = new THREE.FogExp2(0x02040a, 0.0012);
   return newScene;
+}
+
+function playBackgroundMusic() {
+  if (!musicReady || !bgMusicEl) return;
+  bgMusicEl.play().catch(err => console.error('Music play error', err));
+}
+
+const resumeMusicOnInteract = () => {
+  userInteracted = true;
+  playBackgroundMusic();
+  window.removeEventListener('pointerdown', resumeMusicOnInteract);
+};
+window.addEventListener('pointerdown', resumeMusicOnInteract);
+
+function loadBackgroundMusic() {
+  fetch(MUSIC_URL)
+    .then(res => {
+      if (!res.ok) throw new Error(`Music fetch failed: ${res.status}`);
+      return res.blob();
+    })
+    .then(blob => {
+      if (musicBlobUrl) URL.revokeObjectURL(musicBlobUrl);
+      musicBlobUrl = URL.createObjectURL(blob);
+      bgMusicEl = new Audio(musicBlobUrl);
+      bgMusicEl.loop = true;
+      bgMusicEl.volume = 0.7;
+      musicReady = true;
+      if (userInteracted) playBackgroundMusic();
+    })
+    .catch(err => console.error('Music load error', err));
 }
