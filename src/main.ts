@@ -34,6 +34,7 @@ const hud = new Hud({
   speedBar: document.getElementById('speed-bar')
 });
 const crosshairEl = document.getElementById('crosshair') as HTMLElement | null;
+const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const raycaster = new THREE.Raycaster();
 
 const smoothedLook = new THREE.Vector3();
@@ -53,6 +54,7 @@ async function init() {
     0.9337123125,
     new THREE.Vector3(0, -2, 0)
   );
+  hideLoading();
 
   smoothedLook.copy(player.root.position).add(CAMERA_RIG.lookOffset);
   window.addEventListener('resize', onResize);
@@ -169,4 +171,9 @@ function loadBackgroundMusic() {
       if (userInteracted) playBackgroundMusic();
     })
     .catch(err => console.error('Music load error', err));
+}
+
+function hideLoading() {
+  if (!loadingEl) return;
+  loadingEl.classList.add('hidden');
 }
