@@ -31,8 +31,11 @@ export class PlayerController {
   private readonly rollDuration = 0.78;
   private rollDir = 1;
   private rollLatch = false;
-  private readonly rollCooldownMs = 2000;
+  private readonly rollCooldownMs = 0;
   private lastRollTimestamp = -Infinity;
+  private hitFlash?: THREE.Mesh;
+  private hitFlashTimer = 0;
+  private readonly hitFlashDuration = 0.35;
 
   constructor(
     private readonly loader: GLTFLoader,
@@ -61,6 +64,7 @@ export class PlayerController {
     model.position.copy(positionOffset);
     this.root.add(model);
     this.engineFlames.attach(); // keep previous relative offsets (parented to root)
+    this.addHitFlash();
   }
 
   update(delta: number, input: InputState): void {
@@ -93,6 +97,7 @@ export class PlayerController {
   updateModelSway(time: number): void {
     if (!this.model || !this.model.userData.baseRotation) return;
     this.model.rotation.copy(this.model.userData.baseRotation);
+    this.updateHitFlash();
   }
 
   shoot(now: number): void {
@@ -146,6 +151,7 @@ export class PlayerController {
   takeDamage(amount: number): boolean {
     if (this.destroyed) return false;
     this.health = Math.max(0, this.health - amount);
+    this.hitFlashTimer = this.hitFlashDuration;
     if (this.health === 0) {
       this.destroy();
       return true;
@@ -198,6 +204,66 @@ export class PlayerController {
     if (!this.rolling) return 0;
     const t = Math.min(1, this.rollTime / this.rollDuration);
     return -this.rollDir * 0.5 * Math.sin(t * Math.PI);
+  }
+
+  private addHitFlash(): void {
+    const material = new THREE.SpriteMaterial({
+      map: this.getHitFlashTexture(),
+      color: 0x66caff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
+      fog: false
+    });
+    const flash = new THREE.Sprite(material);
+    const size = 3.4;
+    flash.scale.set(size, size, 1);
+    flash.name = 'hit-flash';
+    flash.renderOrder = 50;
+    this.root.add(flash);
+    this.hitFlash = flash;
+  }
+
+  private updateHitFlash(): void {
+    if (!this.hitFlash) return;
+    if (this.hitFlashTimer <= 0) {
+      this.hitFlash.visible = false;
+      return;
+    }
+    this.hitFlashTimer = Math.max(0, this.hitFlashTimer - 1 / 60);
+    const t = 1 - this.hitFlashTimer / this.hitFlashDuration;
+    const material = this.hitFlash.material as THREE.SpriteMaterial;
+    const opacity = THREE.MathUtils.lerp(0.7, 0, t);
+    material.opacity = opacity;
+    this.hitFlash.visible = opacity > 0;
+
+    const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+    this.hitFlash.position.copy(dir.multiplyScalar(2.2));
+    this.hitFlash.lookAt(this.hitFlash.position.clone().add(dir));
+  }
+
+  private getHitFlashTexture(): THREE.Texture {
+    if (this.hitFlashTexture) return this.hitFlashTexture;
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.1, size / 2, size / 2, size * 0.5);
+      gradient.addColorStop(0, 'rgba(255,255,255,0.9)');
+      gradient.addColorStop(0.35, 'rgba(102,202,255,0.45)');
+      gradient.addColorStop(1, 'rgba(102,202,255,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+    }
+    this.hitFlashTexture = new THREE.CanvasTexture(canvas);
+    this.hitFlashTexture.minFilter = THREE.LinearFilter;
+    this.hitFlashTexture.magFilter = THREE.LinearFilter;
+    this.hitFlashTexture.wrapS = this.hitFlashTexture.wrapT = THREE.ClampToEdgeWrapping;
+    return this.hitFlashTexture;
   }
 
   private async load(path: string): Promise<THREE.Object3D> {
@@ -293,6 +359,10 @@ export class PlayerController {
     this.root.position.y = Math.max(this.playArea.minY, Math.min(this.playArea.maxY, this.root.position.y));
   }
 }
+
+
+
+
 
 
 

@@ -10,6 +10,7 @@ type ExplosionInstance = {
   totalTime: number;
   startScale: number;
   peakScale: number;
+  settleScale: number;
   endScale: number;
   materials: { mat: THREE.Material & { opacity?: number }; baseOpacity: number }[];
   particle?: THREE.Points;
@@ -20,13 +21,17 @@ export class ExplosionManager {
   private animations: THREE.AnimationClip[] = [];
   private readonly active: ExplosionInstance[] = [];
   private soundBuffer: AudioBuffer | null = null;
+  private readonly anisotropy: number;
 
   constructor(
     private readonly loader: GLTFLoader,
     private readonly scene: THREE.Scene,
     private readonly assetsPath: string,
-    private readonly listener: THREE.AudioListener
-  ) {}
+    private readonly listener: THREE.AudioListener,
+    anisotropy: number = 8
+  ) {
+    this.anisotropy = anisotropy;
+  }
 
   async init(): Promise<void> {
     const gltf = await this.load(`${this.assetsPath}/sparksexplosion/scene.gltf`);
@@ -36,10 +41,11 @@ export class ExplosionManager {
 
   trigger(position: THREE.Vector3, scale: number = 16): void {
     if (!this.base) return;
+    const scaled = scale * 0.5; // reduce overall size to avoid pixelation
     const explosion = clone(this.base);
     const container = new THREE.Group();
     container.position.copy(position);
-    const startScale = scale * 0.08; // start tiny for flash bloom
+    const startScale = scaled * 0.25; // start small for bloom pop-in
     container.scale.setScalar(startScale);
 
     explosion.traverse(obj => {
@@ -57,7 +63,8 @@ export class ExplosionManager {
           if (!tex) return;
           tex.minFilter = THREE.LinearMipmapLinearFilter;
           tex.magFilter = THREE.LinearFilter;
-          tex.anisotropy = 8;
+          tex.anisotropy = this.anisotropy;
+          tex.needsUpdate = true;
         };
         updateTex(typed.map);
         updateTex(typed.emissiveMap);
@@ -82,7 +89,7 @@ export class ExplosionManager {
       }
     });
 
-    const particle = this.createParticles(scale * 0.12);
+    const particle = this.createParticles(scaled * 0.1);
     container.add(particle);
 
     let mixer: THREE.AnimationMixer | undefined;
@@ -104,11 +111,12 @@ export class ExplosionManager {
       object: explosion,
       container,
       mixer,
-      timeLeft: 3,
-      totalTime: 3,
+      timeLeft: 1.4,
+      totalTime: 1.4,
       startScale,
-      peakScale: scale * 1.4,
-      endScale: scale * 0.12,
+      peakScale: scaled * 1.3,
+      settleScale: scaled * 1,
+      endScale: scaled * 0.6,
       materials,
       particle
     });
@@ -128,7 +136,7 @@ export class ExplosionManager {
       entry.timeLeft -= delta;
       const t = 1 - entry.timeLeft / entry.totalTime;
 
-      const scale = this.getScaleAt(t, entry.startScale, entry.peakScale, entry.endScale);
+      const scale = this.getScaleAt(t, entry.startScale, entry.peakScale, entry.settleScale, entry.endScale);
       entry.container.scale.setScalar(scale);
 
       const intensity = this.getIntensityAt(t);
@@ -201,22 +209,22 @@ export class ExplosionManager {
     return points;
   }
 
-  private getScaleAt(t: number, start: number, peak: number, end: number): number {
-    if (t < 0.2) {
-      const k = t / 0.2;
+  private getScaleAt(t: number, start: number, peak: number, settle: number, end: number): number {
+    if (t < 0.18) {
+      const k = t / 0.18;
       return THREE.MathUtils.lerp(start, peak, k * k * (3 - 2 * k));
     }
-    if (t < 0.6) {
-      const k = (t - 0.2) / 0.4;
-      return THREE.MathUtils.lerp(peak, peak * 0.9, k);
+    if (t < 0.4) {
+      const k = (t - 0.18) / 0.22;
+      return THREE.MathUtils.lerp(peak, settle, k);
     }
-    const k = (t - 0.6) / 0.4;
-    return THREE.MathUtils.lerp(peak * 0.9, end, k);
+    const k = (t - 0.4) / 0.6;
+    return THREE.MathUtils.lerp(settle, end, k);
   }
 
   private getIntensityAt(t: number): number {
-    if (t < 0.18) return THREE.MathUtils.lerp(0.15, 2.4, t / 0.18);
-    if (t < 0.5) return THREE.MathUtils.lerp(2.4, 1, (t - 0.18) / 0.32);
-    return THREE.MathUtils.lerp(1, 0, (t - 0.5) / 0.5);
+    // No extra brightening; hold opacity, then fade out.
+    if (t < 0.6) return 1;
+    return THREE.MathUtils.lerp(1, 0, (t - 0.6) / 0.4);
   }
 }

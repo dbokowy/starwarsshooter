@@ -33,7 +33,7 @@ const starfield = createStarfield(scene, IS_MOBILE ? 0.45 : 1);
 let planet: THREE.Object3D | null = null;
 let destroyer: THREE.Object3D | null = null;
 const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
-const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener);
+const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, renderer.capabilities.getMaxAnisotropy());
 const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
 
 const hud = new Hud({
@@ -58,7 +58,7 @@ const testExplosionHandler = (event: KeyboardEvent) => {
 const immortalityBtn = document.getElementById('toggle-immortal') as HTMLButtonElement | null;
 const enemyFireBtn = document.getElementById('toggle-enemy-fire') as HTMLButtonElement | null;
 const enemyExplosionBtn = document.getElementById('trigger-enemy-explosion') as HTMLButtonElement | null;
-let immortal = true;
+let immortal = false;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
@@ -259,7 +259,8 @@ function showControlsModal() {
 
 function onPlayerHit(): void {
   if (immortal) return;
-  const destroyed = player.takeDamage(PLAYER_CONFIG.maxHealth * 0.1);
+  const damage = PLAYER_CONFIG.maxHealth * 0.05; // 1/20th of max
+  const destroyed = player.takeDamage(damage);
   if (destroyed) {
     explosions.trigger(player.root.position, 18);
   }
@@ -283,8 +284,8 @@ function bindToggles(): void {
       immortalityBtn.classList.toggle('active', immortal);
       immortalityBtn.textContent = immortal ? 'Niesmiertelnosc: ON' : 'Niesmiertelnosc: OFF';
     });
-    immortalityBtn.textContent = 'Niesmiertelnosc: ON';
-    immortalityBtn.classList.add('active');
+    immortalityBtn.textContent = 'Niesmiertelnosc: OFF';
+    immortalityBtn.classList.remove('active');
   }
 
   if (enemyFireBtn) {
