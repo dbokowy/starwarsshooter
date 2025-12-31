@@ -25,8 +25,8 @@ scene.add(player);
 player.position.set(0, 0, 40);
 
 let playerModel = null;
-const cameraOffset = new THREE.Vector3(0, 6, 14); // higher to view ship from above (~10° more)
-const lookOffset = new THREE.Vector3(0, 2.3, -14);
+const cameraOffset = new THREE.Vector3(0, 2.7, 14);
+const lookOffset = new THREE.Vector3(0, 1.5, -14);
 const smoothedLook = new THREE.Vector3();
 const engineFlames = [];
 
@@ -36,7 +36,7 @@ let lastShot = 0;
 
 const maxHealth = 100;
 let health = maxHealth;
-const baseSpeed = 4.6; // reduced to 10% of previous starting speed
+const baseSpeed = 46;
 const strafeSpeed = 18;
 const boostMultiplier = 1.8;
 let currentSpeed = baseSpeed;
@@ -195,12 +195,10 @@ function loadPlayer() {
   loadModel(`${ASSETS}/x-wing-thruster-glow/scene.gltf`)
     .then(model => {
       playerModel = model;
-      model.scale.setScalar(0.9337123125); // another ~10% smaller
-      model.rotation.set(0.1745329, Math.PI / 12, -Math.PI / 18); // pitch ~10° down, yaw ~15° left, roll ~10° right
-      model.userData.baseRotation = model.rotation.clone(); // keep pristine orientation for sway offsets
-      model.position.y = -2; // drop the model further (~10%) relative to player
+      model.scale.setScalar(0.575); // ~15% larger for closer framing
+      model.rotation.set(-Math.PI / 20, Math.PI / 12, 0); // pitch ~5° up, yaw ~15° left
       player.add(model);
-      createEngineFlames();
+      createEngineFlames();d
     })
     .catch(console.error);
 }
@@ -305,7 +303,6 @@ function update() {
   updateBullets(delta);
   updateCamera(delta);
   updateEngineFlames(delta);
-  updateModelSway();
   updateHud();
 
   if (planet) planet.rotation.y += delta * 0.05;
@@ -448,20 +445,6 @@ function updateEngineFlames(delta) {
   });
 }
 
-function updateModelSway() {
-  if (!playerModel || !playerModel.userData.baseRotation) return;
-
-  const t = clock.getElapsedTime();
-  const throttle = THREE.MathUtils.clamp(currentSpeed / (baseSpeed * boostMultiplier), 0, 1);
-  const throttleRamp = Math.pow(throttle, 2); // stronger sway as speed/acceleration rises
-  const pitchAmp = 0.01 + 0.06 * throttleRamp; // low base, steeper growth
-  const rollAmp = 0.015 + 0.08 * throttleRamp;
-
-  playerModel.rotation.x = playerModel.userData.baseRotation.x + Math.sin(t * 2.1) * pitchAmp;
-  playerModel.rotation.y = playerModel.userData.baseRotation.y;
-  playerModel.rotation.z = playerModel.userData.baseRotation.z + Math.sin(t * 1.6 + 0.8) * rollAmp;
-}
-
 function updateHud() {
   if (healthBar) {
     const pct = Math.max(0, health) / maxHealth;
@@ -472,7 +455,7 @@ function updateHud() {
     const minSpeed = baseSpeed;
     const maxSpeed = baseSpeed * boostMultiplier;
     const norm = THREE.MathUtils.clamp((currentSpeed - minSpeed) / (maxSpeed - minSpeed), 0, 1);
-    const adjusted = 0.1 + norm * 0.9; // start at 10%, max 100%
+    const adjusted = 0.3 + norm * 0.7; // start at 30%, max 100%
     speedBar.style.width = `${adjusted * 100}%`;
   }
 }
