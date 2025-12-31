@@ -65,7 +65,7 @@ export class EngineFlames {
     });
   }
 
-  update(currentSpeed: number, baseSpeed: number, boostMultiplier: number, time: number): void {
+  update(currentSpeed: number, baseSpeed: number, boostMultiplier: number, time: number, rollBend: number = 0): void {
     if (!this.flames.length) return;
 
     const boostNorm = THREE.MathUtils.clamp((currentSpeed - baseSpeed) / (baseSpeed * (boostMultiplier - 1)), 0, 1);
@@ -83,6 +83,7 @@ export class EngineFlames {
 
       // keep origin at nozzle; with base-translated geometry, scaling now extends only backward
       flame.position.copy(flame.userData.offset);
+      flame.rotation.z = rollBend; // bend exhaust opposite roll
 
       const targetOpacity = THREE.MathUtils.lerp(0.18, 0.85, flare);
       flame.children.forEach(child => {
@@ -96,6 +97,12 @@ export class EngineFlames {
           material.color.lerpColors(baseColor, hotColor, boostHeat);
         }
       });
+    });
+  }
+
+  setVisible(visible: boolean): void {
+    this.flames.forEach(flame => {
+      flame.visible = visible;
     });
   }
 }

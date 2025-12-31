@@ -19,6 +19,8 @@
         <button id="mobile-fire" class="mobile-btn primary">Ogien</button>
         <div class="inline-buttons">
           <button id="mobile-boost" class="mobile-btn ghost">Boost</button>
+          <button id="mobile-roll-left" class="mobile-btn ghost">Roll L</button>
+          <button id="mobile-roll-right" class="mobile-btn ghost">Roll R</button>
         </div>
       </div>
     </div>
@@ -43,16 +45,27 @@
       </div>
     </div>
   </div>
+  <div id="debug-toggles">
+    <button id="toggle-immortal" class="toggle-btn">Niesmiertelnosc: OFF</button>
+    <button id="toggle-enemy-fire" class="toggle-btn">Ogień Wrogow: ON</button>
+    <button id="trigger-enemy-explosion" class="toggle-btn">Eksplozja Wroga</button>
+  </div>
   <div id="controls-modal" class="hidden">
     <div class="controls-card">
       <h2>Sterowanie</h2>
-      <ul>
+      <ul class="desktop-controls">
         <li><strong>W / S</strong> - pochylenie gora/dol</li>
         <li><strong>A / D</strong> - obrot w lewo/prawo</li>
         <li><strong>Shift</strong> - przyspieszenie (booster)</li>
         <li><strong>LPM</strong> - strzal</li>
         <li><strong>PPM</strong> - obrot kamery</li>
-        <li><strong>Dotyk</strong> - lewy drazek do sterowania, przyciski z prawej do ognia/boostu</li>
+        <li><strong>Q / E</strong> - beczka w lewo / prawo</li>
+      </ul>
+      <ul class="mobile-controls">
+        <li><strong>Lewy drazek</strong> - sterowanie</li>
+        <li><strong>Ogień</strong> - strzal</li>
+        <li><strong>Boost</strong> - przyspieszenie</li>
+        <li><strong>Roll L / Roll R</strong> - beczki unikowe</li>
       </ul>
       <button id="controls-close">Zaczynam</button>
     </div>

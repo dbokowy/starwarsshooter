@@ -15,7 +15,9 @@ export function createInputController(target: HTMLElement, onShoot: () => void):
     pitchDown: false,
     up: false,
     down: false,
-    boost: false
+    boost: false,
+    rollLeft: false,
+    rollRight: false
   };
 
   const handleKey = (event: KeyboardEvent, isDown: boolean) => {
@@ -47,6 +49,12 @@ export function createInputController(target: HTMLElement, onShoot: () => void):
       case 'ShiftLeft':
       case 'ShiftRight':
         state.boost = isDown;
+        break;
+      case 'KeyQ':
+        state.rollLeft = isDown;
+        break;
+      case 'KeyE':
+        state.rollRight = isDown;
         break;
       default:
         break;
@@ -94,6 +102,8 @@ function setupMobileControls(state: InputState, onShoot: () => void): CleanupFn 
   const stick = document.getElementById('mobile-stick');
   const fireBtn = document.getElementById('mobile-fire');
   const boostBtn = document.getElementById('mobile-boost');
+  const rollLeftBtn = document.getElementById('mobile-roll-left');
+  const rollRightBtn = document.getElementById('mobile-roll-right');
   if (!mobileRoot) return () => undefined;
 
   mobileRoot.classList.add('visible');
@@ -109,6 +119,20 @@ function setupMobileControls(state: InputState, onShoot: () => void): CleanupFn 
 
   if (boostBtn) {
     cleanups.push(bindHoldButton(boostBtn, active => (state.boost = active)));
+  }
+
+  if (rollLeftBtn) {
+    cleanups.push(bindTapButton(rollLeftBtn, () => {
+      state.rollLeft = true;
+      setTimeout(() => (state.rollLeft = false), 50);
+    }));
+  }
+
+  if (rollRightBtn) {
+    cleanups.push(bindTapButton(rollRightBtn, () => {
+      state.rollRight = true;
+      setTimeout(() => (state.rollRight = false), 50);
+    }));
   }
 
   cleanups.push(() => {
@@ -213,6 +237,22 @@ function bindHoldButton(button: HTMLElement, onChange: (active: boolean) => void
   };
 }
 
+function bindTapButton(button: HTMLElement, onTap: () => void): CleanupFn {
+  const handler = (event: PointerEvent) => {
+    event.preventDefault();
+    onTap();
+  };
+  button.addEventListener('pointerdown', handler);
+  button.addEventListener('pointerup', handler);
+  button.addEventListener('pointercancel', handler);
+
+  return () => {
+    button.removeEventListener('pointerdown', handler);
+    button.removeEventListener('pointerup', handler);
+    button.removeEventListener('pointercancel', handler);
+  };
+}
+
 function bindFireButton(button: HTMLElement, onShoot: () => void): CleanupFn {
   let fireInterval: number | null = null;
 
@@ -261,6 +301,8 @@ function resetState(state: InputState): void {
   state.up = false;
   state.down = false;
   state.boost = false;
+  state.rollLeft = false;
+  state.rollRight = false;
 }
 
 function clamp(value: number, min: number, max: number): number {

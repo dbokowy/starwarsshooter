@@ -8,6 +8,8 @@ export type InputState = {
   up: boolean;
   down: boolean;
   boost: boolean;
+  rollLeft: boolean;
+  rollRight: boolean;
 };
 
 export type Bullet = {

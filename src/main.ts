@@ -8,6 +8,8 @@ import { createStarfield, loadEnvironment, loadStarDestroyer, setupLights } from
 import { Hud } from './hud.js';
 import { PlayerController } from './player.js';
 import { CameraRigController } from './camera.js';
+import { ExplosionManager } from './explosions.js';
+import { EnemySquadron, Obstacle } from './enemy.js';
 
 const IS_MOBILE = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1;
 const renderer = createRenderer(IS_MOBILE);
@@ -31,6 +33,8 @@ const starfield = createStarfield(scene, IS_MOBILE ? 0.45 : 1);
 let planet: THREE.Object3D | null = null;
 let destroyer: THREE.Object3D | null = null;
 const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
+const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener);
+const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
 
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
@@ -41,6 +45,20 @@ const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const controlsModal = document.getElementById('controls-modal') as HTMLElement | null;
 const controlsCloseBtn = document.getElementById('controls-close') as HTMLButtonElement | null;
 const raycaster = new THREE.Raycaster();
+const testExplosionHandler = (event: KeyboardEvent) => {
+  if (event.code === 'KeyT') {
+    if (!player.isDestroyed()) {
+      player.destroy();
+      explosions.trigger(player.root.position, 18);
+    } else {
+      explosions.trigger(player.root.position, 18);
+    }
+  }
+};
+const immortalityBtn = document.getElementById('toggle-immortal') as HTMLButtonElement | null;
+const enemyFireBtn = document.getElementById('toggle-enemy-fire') as HTMLButtonElement | null;
+const enemyExplosionBtn = document.getElementById('trigger-enemy-explosion') as HTMLButtonElement | null;
+let immortal = true;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
@@ -48,12 +66,15 @@ const inputController = createInputController(renderer.domElement, () => player.
 init();
 
 async function init() {
+  document.body.classList.toggle('is-touch', IS_MOBILE);
   setupLights(scene, !IS_MOBILE);
   planet = await loadEnvironment(loader, scene, ASSETS_PATH);
   if (!IS_MOBILE) {
     destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
   }
   audioLoader.load(`${ASSETS_PATH}/tie-fighter-fire-1.mp3`, buffer => player.setFireSound(buffer));
+  audioLoader.load(`${ASSETS_PATH}/explosion-fx-425453.mp3`, buffer => explosions.setSoundBuffer(buffer));
+  await explosions.init();
   loadBackgroundMusic();
   await player.loadModel(
     `${ASSETS_PATH}/x-wing-thruster-glow/scene.gltf`,
@@ -61,10 +82,13 @@ async function init() {
     0.9337123125,
     new THREE.Vector3(0, -2, 0)
   );
+  await enemies.init(2, player, destroyer ? destroyer.position : undefined);
   hideLoading();
 
   smoothedLook.copy(player.root.position).add(CAMERA_RIG.lookOffset);
   window.addEventListener('resize', onResize);
+  window.addEventListener('keydown', testExplosionHandler);
+  bindToggles();
   onResize();
   renderer.setAnimationLoop(update);
   showControlsModal();
@@ -73,15 +97,18 @@ async function init() {
 function update() {
   const delta = clock.getDelta();
   const elapsed = clock.getElapsedTime();
+  const now = performance.now();
 
   player.update(delta, inputController.state);
   player.updateBullets(delta);
+  enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit);
   updateCamera();
   player.updateFlames(elapsed * 2); // match prior timing scale
   player.updateModelSway(elapsed);
   starfield.update(delta);
   if (planet) planet.rotation.y += delta * 0.005; // slower spin for backdrop planet
   updateCrosshair();
+  explosions.update(delta);
 
   hud.updateHealth(player.health, PLAYER_CONFIG.maxHealth);
   hud.updateSpeed(player.currentSpeed, PLAYER_CONFIG.baseSpeed, PLAYER_CONFIG.boostMultiplier);
@@ -228,4 +255,51 @@ function showControlsModal() {
   controlsCloseBtn.addEventListener('click', () => {
     controlsModal.classList.add('hidden');
   });
+}
+
+function onPlayerHit(): void {
+  if (immortal) return;
+  const destroyed = player.takeDamage(PLAYER_CONFIG.maxHealth * 0.1);
+  if (destroyed) {
+    explosions.trigger(player.root.position, 18);
+  }
+}
+
+function buildObstacles(): Obstacle[] {
+  const list: Obstacle[] = [{ position: player.root.position, radius: player.collisionRadius + 10 }];
+  if (planet) {
+    list.push({ position: planet.position, radius: 1200 });
+  }
+  if (destroyer) {
+    list.push({ position: destroyer.position, radius: 420 });
+  }
+  return list;
+}
+
+function bindToggles(): void {
+  if (immortalityBtn) {
+    immortalityBtn.addEventListener('click', () => {
+      immortal = !immortal;
+      immortalityBtn.classList.toggle('active', immortal);
+      immortalityBtn.textContent = immortal ? 'Niesmiertelnosc: ON' : 'Niesmiertelnosc: OFF';
+    });
+    immortalityBtn.textContent = 'Niesmiertelnosc: ON';
+    immortalityBtn.classList.add('active');
+  }
+
+  if (enemyFireBtn) {
+    enemyFireBtn.addEventListener('click', () => {
+      const active = enemyFireBtn.classList.toggle('active');
+      enemyFireBtn.textContent = active ? 'Ogień Wrogow: ON' : 'Ogień Wrogow: OFF';
+      enemies.setFireEnabled(active);
+    });
+    enemyFireBtn.textContent = 'Ogień Wrogow: ON';
+    enemyFireBtn.classList.add('active');
+  }
+
+  if (enemyExplosionBtn) {
+    enemyExplosionBtn.addEventListener('click', () => {
+      enemies.debugExplodeOne();
+    });
+  }
 }

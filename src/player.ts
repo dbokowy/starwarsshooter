@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Bullet, InputState, PlayArea, PlayerConfig } from './types.js';
 import { EngineFlames } from './effects.js';
@@ -17,6 +17,7 @@ export class PlayerController {
   currentSpeed: number;
   health: number;
   readonly bullets: Bullet[] = [];
+  readonly collisionRadius = 6.5;
   private lastShot = 0;
   private readonly engineFlames: EngineFlames;
   private fireBuffer: AudioBuffer | null = null;
@@ -24,6 +25,14 @@ export class PlayerController {
   private overboostCooldownMs = 60000;
   private overboostRemainingMs = 8000;
   private overboostLockedUntil = 0;
+  private destroyed = false;
+  private rolling = false;
+  private rollTime = 0;
+  private readonly rollDuration = 0.78;
+  private rollDir = 1;
+  private rollLatch = false;
+  private readonly rollCooldownMs = 2000;
+  private lastRollTimestamp = -Infinity;
 
   constructor(
     private readonly loader: GLTFLoader,
@@ -55,9 +64,10 @@ export class PlayerController {
   }
 
   update(delta: number, input: InputState): void {
-    if (!this.model) return;
+    if (!this.model || this.destroyed) return;
 
     this.updateSpeed(delta, input);
+    this.handleRollInput(input);
     this.updateTransform(delta, input);
     this.clampToPlayArea();
   }
@@ -76,7 +86,8 @@ export class PlayerController {
   }
 
   updateFlames(time: number): void {
-    this.engineFlames.update(this.currentSpeed, this.config.baseSpeed, this.config.boostMultiplier, time);
+    if (this.destroyed) return;
+    this.engineFlames.update(this.currentSpeed, this.config.baseSpeed, this.config.boostMultiplier, time, this.getRollBend());
   }
 
   updateModelSway(time: number): void {
@@ -85,7 +96,7 @@ export class PlayerController {
   }
 
   shoot(now: number): void {
-    if (!this.model) return;
+    if (!this.model || this.destroyed) return;
     if (now - this.lastShot < 160) return;
     this.lastShot = now;
 
@@ -130,6 +141,63 @@ export class PlayerController {
         laserSound.play();
       }
     });
+  }
+
+  takeDamage(amount: number): boolean {
+    if (this.destroyed) return false;
+    this.health = Math.max(0, this.health - amount);
+    if (this.health === 0) {
+      this.destroy();
+      return true;
+    }
+    return false;
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.health = 0;
+    this.currentSpeed = 0;
+    this.setShipVisible(false);
+  }
+
+  setShipVisible(visible: boolean): void {
+    if (this.model) {
+      this.model.visible = visible;
+    }
+    this.engineFlames.setVisible(visible);
+  }
+
+  isDestroyed(): boolean {
+    return this.destroyed;
+  }
+
+  private handleRollInput(input: InputState): void {
+    const rollHeld = input.rollLeft || input.rollRight;
+    if (!rollHeld) {
+      this.rollLatch = false; // allow next roll after releasing keys
+    }
+    if (this.rolling || this.rollLatch) return;
+    const now = performance.now();
+    if (now - this.lastRollTimestamp < this.rollCooldownMs) return;
+    if (rollHeld) {
+      this.startRoll(input.rollLeft ? -1 : 1);
+      this.rollLatch = true;
+      this.lastRollTimestamp = now;
+    }
+  }
+
+  private startRoll(direction: number): void {
+    this.rolling = true;
+    this.rollDir = direction;
+    this.rollTime = 0;
+    document.body.classList.add('roll-blur');
+  }
+
+  private getRollBend(): number {
+    if (!this.rolling) return 0;
+    const t = Math.min(1, this.rollTime / this.rollDuration);
+    return -this.rollDir * 0.5 * Math.sin(t * Math.PI);
   }
 
   private async load(path: string): Promise<THREE.Object3D> {
@@ -202,7 +270,21 @@ export class PlayerController {
     this.root.rotation.x = THREE.MathUtils.clamp(this.root.rotation.x + pitchChange, -Math.PI / 3, Math.PI / 3);
 
     const targetRoll = THREE.MathUtils.clamp(((input.left ? 1 : 0) - (input.right ? 1 : 0)) * 0.4, -0.6, 0.6);
-    this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, targetRoll, 0.1);
+
+    if (this.rolling) {
+      this.rollTime += delta;
+      const t = Math.min(1, this.rollTime / this.rollDuration);
+      const rollExtra = this.rollDir * Math.PI * 2 * t; // exact 360 deg
+      this.root.rotation.z = targetRoll + rollExtra;
+      if (t >= 1) {
+        this.rolling = false;
+        this.rollTime = 0;
+        this.root.rotation.z = targetRoll; // end exactly at baseline
+        document.body.classList.remove('roll-blur');
+      }
+    } else {
+      this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, targetRoll, 0.12);
+    }
   }
 
   private clampToPlayArea(): void {
@@ -211,3 +293,15 @@ export class PlayerController {
     this.root.position.y = Math.max(this.playArea.minY, Math.min(this.playArea.maxY, this.root.position.y));
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
