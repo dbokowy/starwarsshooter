@@ -24,6 +24,7 @@ canvas {
   position: fixed;
   inset: 0;
   display: block;
+  touch-action: none;
 }
 
 #crosshair {
@@ -321,5 +322,175 @@ canvas {
   --accent: var(--speed-accent);
   --accent-strong: #ffd7c5;
   --glow: rgba(255, 123, 84, 0.4);
+}
+
+/* Mobile HUD + controls */
+#mobile-ui {
+  position: fixed;
+  inset: 0;
+  display: none;
+  grid-template-columns: repeat(2, 1fr);
+  align-items: end;
+  padding: 0 16px 18px;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 15;
+}
+
+#mobile-ui .mobile-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#mobile-ui .mobile-slot.align-right {
+  align-items: flex-end;
+}
+
+.mobile-pad {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(94, 203, 255, 0.22), rgba(12, 18, 32, 0.92));
+  border: 1px solid rgba(94, 203, 255, 0.4);
+  box-shadow: 0 0 16px rgba(11, 216, 255, 0.24), inset 0 0 12px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.mobile-stick {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #0b9dda, #0fd0ff);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45), inset 0 0 12px rgba(255, 255, 255, 0.18);
+  transform: translate(-50%, -50%);
+  transition: transform 0.06s ease-out;
+}
+
+.mobile-actions {
+  display: grid;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.inline-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.mobile-btn {
+  border: 1px solid rgba(94, 203, 255, 0.4);
+  background: rgba(5, 12, 24, 0.7);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: auto;
+  min-width: 96px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+.mobile-btn.primary {
+  background: linear-gradient(90deg, #0b9dda, #0fd0ff);
+  color: #041019;
+  font-weight: 700;
+  box-shadow: 0 12px 20px rgba(15, 208, 255, 0.35);
+}
+
+.mobile-btn.ghost {
+  background: rgba(12, 18, 32, 0.85);
+}
+
+body.is-touch #mobile-ui,
+#mobile-ui.visible {
+  display: grid;
+}
+
+body.is-touch #hud {
+  width: calc(100vw - 24px);
+  grid-template-columns: 1fr;
+  top: 12px;
+  bottom: auto;
+  gap: 8px;
+}
+
+body.is-touch #hud .bar {
+  padding: 0;
+  border: none;
+  clip-path: none;
+  background: none;
+  box-shadow: none;
+}
+
+body.is-touch #hud .bar-head {
+  display: none;
+}
+
+body.is-touch #hud .bar-track {
+  height: 12px;
+  border: none;
+  clip-path: none;
+  background: rgba(4, 12, 20, 0.6);
+  box-shadow: none;
+}
+
+body.is-touch #hud .bar-track::before,
+body.is-touch #hud .bar-track::after,
+body.is-touch #hud .bar::before,
+body.is-touch #hud .bar::after {
+  display: none;
+}
+
+body.is-touch #hud .bar-fill {
+  clip-path: none;
+  box-shadow: none;
+  background: linear-gradient(90deg, #1a9bff, #5ecbff);
+}
+
+body.is-touch #hud .bar-fill.speed {
+  background: linear-gradient(90deg, #f6503f, #ff8b6c);
+}
+
+@media (max-width: 900px) {
+  #hud {
+    width: calc(100vw - 32px);
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  #crosshair {
+    width: 28px;
+    height: 28px;
+  }
+
+  .controls-card {
+    max-width: min(420px, 100%);
+  }
+}
+
+@media (max-width: 640px) {
+  #controls-modal {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .controls-card {
+    width: 100%;
+    border-radius: 10px;
+  }
+
+  #hud {
+    bottom: 140px;
+  }
 }
 
