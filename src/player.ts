@@ -115,17 +115,19 @@ export class PlayerController {
     if (now - this.lastShot < 160) return;
     this.lastShot = now;
 
-    const coreGeometry = new THREE.BoxGeometry(5.6, -0.9, -3.2);
-    const glowGeometry = new THREE.BoxGeometry(5.6, -0.9, -3.2);
+    const coreLength = 20;
+    const glowLength = 20;
+    const coreGeometry = new THREE.BoxGeometry(0.36, 0.36, coreLength);
+    const glowGeometry = new THREE.BoxGeometry(0.58, 0.58, glowLength);
     const coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff6a6a,
+      color: 0xcc2020,
       transparent: true,
       opacity: 1,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
     const glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0xe81607,
+      color: 0x990b0b,
       transparent: true,
       opacity: 0.65,
       blending: THREE.AdditiveBlending,
@@ -134,7 +136,9 @@ export class PlayerController {
 
     this.config.muzzleOffsets.forEach(offset => {
       const core = new THREE.Mesh(coreGeometry, coreMaterial);
+      core.position.z = -coreLength / 2; // shift so the beam stretches forward from the muzzle
       const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+      glow.position.z = -glowLength / 2;
       const laser = new THREE.Group();
       laser.add(core);
       laser.add(glow);
@@ -444,11 +448,6 @@ export class PlayerController {
     this.root.position.y = Math.max(this.playArea.minY, Math.min(this.playArea.maxY, this.root.position.y));
   }
 }
-
-
-
-
-
 
 
 
