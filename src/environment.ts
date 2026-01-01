@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { Box3, Sphere } from 'three';
 
 export type StarLayer = { points: THREE.Points; parallax: number };
 
@@ -14,11 +15,14 @@ export type SpaceDust = {
   update: (delta: number, playerPos: THREE.Vector3, playerVel: THREE.Vector3, playerForward: THREE.Vector3) => void;
 };
 
-export function setupLights(scene: THREE.Scene, enableShadows: boolean = true): void {
+export function setupLights(scene: THREE.Scene, enableShadows: boolean = true, sunDirection: THREE.Vector3 = new THREE.Vector3(0.4, 0.9, 0.3)): void {
   scene.add(new THREE.HemisphereLight(0x406080, 0x080810, 0.9));
 
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
-  keyLight.position.set(25, 60, 20);
+  const dir = sunDirection.clone().normalize();
+  const keyLight = new THREE.DirectionalLight(0xffffff, 2.32); // +40% vs previous
+  keyLight.position.copy(dir.clone().multiplyScalar(200));
+  keyLight.target.position.set(0, 0, 0);
+  scene.add(keyLight.target);
   keyLight.castShadow = enableShadows;
   keyLight.shadow.bias = -0.0002;
   keyLight.shadow.mapSize.set(enableShadows ? 2048 : 1024, enableShadows ? 2048 : 1024);
@@ -71,9 +75,11 @@ export function createStarfield(scene: THREE.Scene, densityScale: number = 1): S
     layers.push({ points, parallax: opts.parallax });
   };
 
-  makeLayer({ count: 2400, size: 0.9, minRadius: 9000, maxRadius: 18000, color: 0xcde7ff, opacity: 0.7, parallax: 0.6 });
-  makeLayer({ count: 900, size: 1.5, minRadius: 7000, maxRadius: 15000, color: 0x9fd5ff, opacity: 0.85, parallax: 1 });
-  makeLayer({ count: 260, size: 2.6, minRadius: 6000, maxRadius: 13000, color: 0xffffff, opacity: 0.95, parallax: 1.4 });
+  // Four-layer starfield for depth/parallax
+  makeLayer({ count: 2200, size: 0.8, minRadius: 11000, maxRadius: 19000, color: 0xbfd8ff, opacity: 0.6, parallax: 0.3 }); // far background
+  makeLayer({ count: 1200, size: 1.1, minRadius: 8500, maxRadius: 16000, color: 0xa9d0ff, opacity: 0.75, parallax: 0.55 });
+  makeLayer({ count: 520, size: 1.9, minRadius: 6500, maxRadius: 12500, color: 0xddeeff, opacity: 0.9, parallax: 0.9 });
+  makeLayer({ count: 220, size: 2.8, minRadius: 5200, maxRadius: 11000, color: 0xffffff, opacity: 0.95, parallax: 1.35 }); // near layer
 
   scene.add(starGroup);
 
@@ -82,8 +88,132 @@ export function createStarfield(scene: THREE.Scene, densityScale: number = 1): S
     layers,
     update: (delta: number, drift: THREE.Vector3 = new THREE.Vector3()) => {
       starGroup.rotation.y += delta * 0.01;
+      // parallax drift opposite to movement to enhance motion depth
+      if (drift.lengthSq() > 0) {
+        const driftScaled = drift.clone().multiplyScalar(0.4);
+        layers.forEach(layer => {
+          layer.points.position.addScaledVector(driftScaled, -layer.parallax);
+        });
+      }
     }
   };
+}
+
+export function createSun(scene: THREE.Scene, position: THREE.Vector3, radius: number = 600): THREE.Object3D {
+  // emissive sphere (core)
+  const sunGeom = new THREE.SphereGeometry(radius * 0.3, 48, 48); // small solid core, mostly hidden by glow
+  const sunMat = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+    transparent: true,
+    opacity: 0,
+    fog: false
+  });
+  const sunMesh = new THREE.Mesh(sunGeom, sunMat);
+  sunMesh.position.set(0, 0, 0);
+  sunMesh.frustumCulled = false;
+  sunMesh.renderOrder = 2;
+
+  // soft core glow sprite to blur the center
+  const coreMat = new THREE.SpriteMaterial({
+    map: getCoreTexture(),
+    color: 0xfff4d0,
+    transparent: true,
+    opacity: 0.9,
+    alphaTest: 0.01,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+    fog: false
+  });
+  const coreSprite = new THREE.Sprite(coreMat);
+  const coreScale = radius * 6; // soft core glow
+  coreSprite.scale.set(coreScale, coreScale, 1);
+  coreSprite.renderOrder = 4;
+  coreSprite.frustumCulled = false;
+
+  // halo sprite
+  const haloMat = new THREE.SpriteMaterial({
+    map: getHaloTexture(),
+    color: 0xffd890,
+    transparent: true,
+    opacity: 0.28,
+    alphaTest: 0.01,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+    fog: false
+  });
+  const halo = new THREE.Sprite(haloMat);
+  const haloScale = radius * 12; // wider falloff
+  halo.scale.set(haloScale, haloScale, 1);
+  halo.renderOrder = 5;
+  halo.frustumCulled = false;
+  halo.name = 'sun-halo';
+
+  const sunGroup = new THREE.Group();
+  sunGroup.add(halo);
+  sunGroup.add(coreSprite);
+  sunGroup.add(sunMesh);
+  sunGroup.position.copy(position);
+  sunGroup.frustumCulled = false;
+  scene.add(sunGroup);
+  return sunGroup;
+}
+
+let cachedHaloTexture: THREE.Texture | null = null;
+function getHaloTexture(): THREE.Texture {
+  if (cachedHaloTexture) return cachedHaloTexture;
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const grad = ctx.createRadialGradient(size / 2, size / 2, size * 0.05, size / 2, size / 2, size * 0.6);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+    grad.addColorStop(0.2, 'rgba(255, 230, 180, 0.5)');
+    grad.addColorStop(0.5, 'rgba(255, 200, 120, 0.22)');
+    grad.addColorStop(1, 'rgba(255, 200, 120, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.encoding = THREE.sRGBColorSpace;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  cachedHaloTexture = tex;
+  return tex;
+}
+
+let cachedCoreTexture: THREE.Texture | null = null;
+function getCoreTexture(): THREE.Texture {
+  if (cachedCoreTexture) return cachedCoreTexture;
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const grad = ctx.createRadialGradient(size / 2, size / 2, size * 0.02, size / 2, size / 2, size * 0.6);
+    grad.addColorStop(0, 'rgba(255,255,255,0.85)');
+    grad.addColorStop(0.2, 'rgba(255, 235, 190, 0.7)');
+    grad.addColorStop(0.45, 'rgba(255, 210, 150, 0.45)');
+    grad.addColorStop(1, 'rgba(255, 200, 120, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.encoding = THREE.sRGBColorSpace;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  cachedCoreTexture = tex;
+  return tex;
 }
 
 export function createSpaceDust(

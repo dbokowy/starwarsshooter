@@ -1,0 +1,11 @@
+Model Information:
+* title:	asteroid
+* source:	https://sketchfab.com/3d-models/asteroid-36da9fde034342dc8e84c7ddb8813a22
+* author:	k206i (https://sketchfab.com/k206i)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "asteroid" (https://sketchfab.com/3d-models/asteroid-36da9fde034342dc8e84c7ddb8813a22) by k206i (https://sketchfab.com/k206i) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

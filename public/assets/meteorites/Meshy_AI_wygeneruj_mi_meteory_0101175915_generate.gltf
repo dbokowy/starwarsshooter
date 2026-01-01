@@ -1,0 +1,110 @@
+{
+  "asset": {
+    "generator": "Khronos glTF Blender I/O v4.3.47",
+    "version": "2.0"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "Mesh1.0",
+      "rotation": [
+        0.7071068286895752,
+        0,
+        0,
+        0.7071068286895752
+      ]
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Mesh1.0",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3
+        }
+      ]
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 2247,
+      "max": [
+        0.9547240138053894,
+        0.7332069873809814,
+        0.4273659884929657
+      ],
+      "min": [
+        -0.9613100290298462,
+        -0.7360739707946777,
+        -0.4288879930973053
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 2247,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 2247,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 9000,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 26964,
+      "byteOffset": 0,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 26964,
+      "byteOffset": 26964,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 17976,
+      "byteOffset": 53928,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 18000,
+      "byteOffset": 71904,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 89904,
+      "uri": "Meshy_AI_wygeneruj_mi_meteory_0101175915_generate.bin"
+    }
+  ]
+}

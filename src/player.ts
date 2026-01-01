@@ -18,6 +18,7 @@ export class PlayerController {
   health: number;
   readonly bullets: Bullet[] = [];
   readonly collisionRadius = 6.5;
+  private baseModelPosition = new THREE.Vector3();
   private readonly startPosition = new THREE.Vector3(0, 0, 40);
   private lastShot = 0;
   private readonly engineFlames: EngineFlames;
@@ -29,7 +30,7 @@ export class PlayerController {
   private destroyed = false;
   private rolling = false;
   private rollTime = 0;
-  private readonly rollDuration = 0.78;
+  private readonly rollDuration = 0.55;
   private rollDir = 1;
   private rollLatch = false;
   private readonly rollCooldownMs = 0;
@@ -75,6 +76,7 @@ export class PlayerController {
     model.rotation.copy(rotation);
     model.userData.baseRotation = model.rotation.clone();
     model.position.copy(positionOffset);
+    this.baseModelPosition.copy(model.position);
     this.root.add(model);
     this.engineFlames.attach(); // keep previous relative offsets (parented to root)
     this.addHitFlash();
@@ -218,6 +220,10 @@ export class PlayerController {
 
   isDestroyed(): boolean {
     return this.destroyed;
+  }
+
+  isRolling(): boolean {
+    return this.rolling;
   }
 
   private handleRollInput(input: InputState): void {
@@ -453,8 +459,3 @@ export class PlayerController {
     this.root.position.y = Math.max(this.playArea.minY, Math.min(this.playArea.maxY, this.root.position.y));
   }
 }
-
-
-
-
-

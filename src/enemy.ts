@@ -351,11 +351,11 @@ export class EnemySquadron {
         const distSq = bullet.mesh.position.distanceToSquared(enemy.root.position);
         const hitRadius = Math.pow(enemy.boundingRadius + this.enemyHitPadding, 2);
         if (distSq <= hitRadius) {
-        this.scene.remove(bullet.mesh);
-        player.bullets.splice(j, 1);
-        enemy.health -= 1;
-        this.updateHealthFill(enemy);
-        enemy.hitFlashTimer = 0.4;
+          this.scene.remove(bullet.mesh);
+          player.bullets.splice(j, 1);
+          enemy.health -= 1;
+          this.updateHealthFill(enemy);
+          enemy.hitFlashTimer = 0.4;
         if (enemy.health <= 0) {
           this.destroyEnemy(enemy);
           this.enemies.splice(i, 1);
@@ -483,11 +483,11 @@ export class EnemySquadron {
         const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
         materials.forEach(mat => {
           if ('color' in mat && mat.color) {
-            mat.color.multiplyScalar(1.1); // slightly darker than previous bright pass
+            mat.color.multiplyScalar(0.7); // darken enemy hulls ~30%
           }
           if ('emissive' in mat) {
-            mat.emissive?.copy((mat.color ?? new THREE.Color(0xffffff)).clone().multiplyScalar(0.8));
-            mat.emissiveIntensity = 0.85;
+            mat.emissive?.copy((mat.color ?? new THREE.Color(0xffffff)).clone().multiplyScalar(0.6));
+            mat.emissiveIntensity = 0.6;
           }
         });
       }
@@ -523,5 +523,14 @@ export class EnemySquadron {
 
   getEnemyRoots(): THREE.Object3D[] {
     return this.enemies.map(e => e.root);
+  }
+
+  destroyEnemyByRoot(root: THREE.Object3D): boolean {
+    const idx = this.enemies.findIndex(e => e.root === root);
+    if (idx === -1) return false;
+    const enemy = this.enemies[idx];
+    this.destroyEnemy(enemy);
+    this.enemies.splice(idx, 1);
+    return true;
   }
 }

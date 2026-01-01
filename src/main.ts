@@ -4,7 +4,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { AudioLoader, AudioListener } from 'three';
 import { CAMERA_RIG, PLAY_AREA, PLAYER_CONFIG, ASSETS_PATH } from './config.js';
 import { createInputController } from './controls.js';
-import { createSpaceDust, createStarfield, loadEnvironment, loadStarDestroyer, setupLights } from './environment.js';
+import { createSpaceDust, createStarfield, createSun, loadEnvironment, loadStarDestroyer, setupLights } from './environment.js';
+import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { Hud } from './hud.js';
 import { PlayerController } from './player.js';
 import { CameraRigController } from './camera.js';
@@ -33,6 +34,12 @@ const starfield = createStarfield(scene, IS_MOBILE ? 0.45 : 1);
 const spaceDust = createSpaceDust(scene, IS_MOBILE ? 90 : 160);
 let planet: THREE.Object3D | null = null;
 let destroyer: THREE.Object3D | null = null;
+let sun: THREE.Mesh | null = null;
+type Asteroid = { mesh: THREE.Object3D; radius: number };
+const asteroids: Asteroid[] = [];
+type AsteroidPrefab = { scene: THREE.Object3D; radius: number };
+const asteroidPrefabs: AsteroidPrefab[] = [];
+let highlightAsteroids = false;
 const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
 const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, renderer.capabilities.getMaxAnisotropy());
 const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
@@ -55,6 +62,7 @@ const testExplosionHandler = (event: KeyboardEvent) => {
 const immortalityBtn = document.getElementById('toggle-immortal') as HTMLButtonElement | null;
 const enemyFireBtn = document.getElementById('toggle-enemy-fire') as HTMLButtonElement | null;
 const enemyExplosionBtn = document.getElementById('trigger-enemy-explosion') as HTMLButtonElement | null;
+const asteroidHighlightBtn = document.getElementById('toggle-asteroid-highlight') as HTMLButtonElement | null;
 const resultModal = document.getElementById('result-modal') as HTMLElement | null;
 const resultMessage = document.getElementById('result-message') as HTMLElement | null;
 const resultRetryBtn = document.getElementById('result-retry') as HTMLButtonElement | null;
@@ -67,16 +75,20 @@ let wave = 1;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
+const startPosition = new THREE.Vector3(0, 0, 40);
 
 init();
 
 async function init() {
   document.body.classList.toggle('is-touch', IS_MOBILE);
-  setupLights(scene, !IS_MOBILE);
+  const sunPos = new THREE.Vector3(-13000, 1600, -9000); // further left, closer in front of planet
+  sun = createSun(scene, sunPos, 784) as THREE.Mesh; // reduced sun size by ~30%
+  setupLights(scene, !IS_MOBILE, sunPos.clone().normalize());
   planet = await loadEnvironment(loader, scene, ASSETS_PATH);
   if (!IS_MOBILE) {
     destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
   }
+  await spawnAsteroids(200);
   audioLoader.load(`${ASSETS_PATH}/tie-fighter-fire-1.mp3`, buffer => player.setFireSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => player.setHitSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/explosion-fx-2.mp3`, buffer => explosions.setSoundBuffer(buffer));
@@ -120,6 +132,9 @@ function update() {
   const playerForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion).normalize();
   spaceDust.update(delta, player.root.position, playerVelocity, playerForward);
   starfield.update(delta, playerDrift);
+  handleAsteroidBulletHits();
+  handleAsteroidCollisions(onEnemyDestroyed);
+  updateSunHalo(elapsed);
   prevPlayerPos.copy(player.root.position);
   if (planet) planet.rotation.y += delta * 0.005; // slower spin for backdrop planet
   updateCrosshair();
@@ -188,6 +203,21 @@ function updateCrosshair() {
   crosshairEl.style.top = `${baseY}%`;
 }
 
+function updateSunHalo(time: number): void {
+  if (!sun) return;
+  const halo = sun.getObjectByName('sun-halo') as THREE.Sprite | null;
+  if (!halo) return;
+  const baseScale = halo.userData.baseScale ?? halo.scale.x;
+  const distance = camera.position.distanceTo(sun.position);
+  const scaleFactor = THREE.MathUtils.clamp(distance / 6000, 0.6, 3.2);
+  const pulsate = 1 + Math.sin(time * 0.6) * 0.06;
+  halo.scale.setScalar(baseScale * scaleFactor * pulsate);
+
+  const mat = halo.material as THREE.SpriteMaterial;
+  mat.opacity = THREE.MathUtils.clamp(0.5 + Math.sin(time * 0.8) * 0.15, 0.25, 0.8);
+  halo.userData.baseScale = baseScale;
+}
+
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -203,14 +233,16 @@ function createRenderer(isMobile: boolean): THREE.WebGLRenderer {
   webgl.setPixelRatio(isMobile ? 1 : Math.min(2, window.devicePixelRatio));
   webgl.outputColorSpace = THREE.SRGBColorSpace;
   webgl.shadowMap.enabled = !isMobile;
+  webgl.toneMapping = THREE.ACESFilmicToneMapping;
+  webgl.toneMappingExposure = 1.1;
   document.body.appendChild(webgl.domElement);
   return webgl;
 }
 
 function createScene(): THREE.Scene {
   const newScene = new THREE.Scene();
-  newScene.background = new THREE.Color(0x02040a);
-  newScene.fog = new THREE.FogExp2(0x02040a, 0.0012);
+  newScene.background = new THREE.Color(0x000000);
+  newScene.fog = new THREE.FogExp2(0x000000, 0.001);
   return newScene;
 }
 
@@ -308,6 +340,7 @@ function buildObstacles(): Obstacle[] {
   if (destroyer) {
     list.push({ position: destroyer.position, radius: 420 });
   }
+  asteroids.forEach(ast => list.push({ position: ast.mesh.position, radius: ast.radius + 8 }));
   return list;
 }
 
@@ -373,6 +406,16 @@ function bindToggles(): void {
     });
   }
 
+  if (asteroidHighlightBtn) {
+    asteroidHighlightBtn.addEventListener('click', () => {
+      highlightAsteroids = !highlightAsteroids;
+      asteroidHighlightBtn.classList.toggle('active', highlightAsteroids);
+      asteroidHighlightBtn.textContent = highlightAsteroids ? 'Podswietl asteroidy: ON' : 'Podswietl asteroidy: OFF';
+      applyAsteroidHighlight(highlightAsteroids);
+    });
+    asteroidHighlightBtn.textContent = 'Podswietl asteroidy: OFF';
+  }
+
   if (resultRetryBtn) {
     resultRetryBtn.addEventListener('click', () => {
       restartGame();
@@ -420,6 +463,158 @@ async function advanceWave(): Promise<void> {
   } else {
     handleVictory();
   }
+}
+
+async function loadAsteroidPrefabs(): Promise<void> {
+  if (asteroidPrefabs.length) return;
+  const gltf = await loader.loadAsync(`${ASSETS_PATH}/asteroids_pack_metallic_version/scene.gltf`);
+  gltf.scene.updateMatrixWorld(true);
+
+  gltf.scene.traverse(obj => {
+    if ('isMesh' in obj && (obj as THREE.Mesh).isMesh) {
+      const mesh = obj as THREE.Mesh;
+      const meshClone = mesh.clone(true);
+
+      // bake world transform into the clone so each variant is self-contained
+      mesh.matrixWorld.decompose(meshClone.position, meshClone.quaternion, meshClone.scale);
+      meshClone.updateMatrix();
+      meshClone.updateMatrixWorld(true);
+
+      const container = new THREE.Object3D();
+      container.add(meshClone);
+      const bounds = new THREE.Box3().setFromObject(container);
+      const sphere = new THREE.Sphere();
+      bounds.getBoundingSphere(sphere);
+      asteroidPrefabs.push({ scene: container, radius: sphere.radius || 1 });
+    }
+  });
+}
+
+function randomAsteroidPosition(): THREE.Vector3 {
+  const pos = new THREE.Vector3();
+  const radius = 700; // match space dust envelope
+  do {
+    pos.randomDirection().multiplyScalar(THREE.MathUtils.randFloat(120, radius)).add(startPosition);
+  } while (pos.distanceTo(startPosition) < 150); // avoid spawning too close
+  return pos;
+}
+
+async function spawnAsteroids(count: number): Promise<void> {
+  await loadAsteroidPrefabs();
+  if (!asteroidPrefabs.length) return;
+
+  for (let i = 0; i < count; i += 1) {
+    const prefab = asteroidPrefabs[Math.floor(Math.random() * asteroidPrefabs.length)];
+    const targetRadius = player.collisionRadius * THREE.MathUtils.randFloat(0.1, 2.0); // 10%–200% of X-wing size
+    const scale = prefab.radius > 0 ? targetRadius / prefab.radius : 1;
+    const rock = clone(prefab.scene);
+    rock.scale.setScalar(scale);
+    rock.traverse(obj => {
+      obj.castShadow = false;
+      obj.receiveShadow = false;
+      obj.frustumCulled = false;
+      // store original materials for highlight toggle
+      if ('material' in obj && obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach(mat => {
+          const m = mat as THREE.MeshStandardMaterial;
+          obj.userData.originalColor = m.color ? m.color.clone() : null;
+          obj.userData.originalEmissive = m.emissive ? m.emissive.clone() : null;
+        });
+      }
+    });
+    rock.position.copy(randomAsteroidPosition());
+    rock.rotation.set(
+      THREE.MathUtils.randFloat(0, Math.PI * 2),
+      THREE.MathUtils.randFloat(0, Math.PI * 2),
+      THREE.MathUtils.randFloat(0, Math.PI * 2)
+    );
+    scene.add(rock);
+    asteroids.push({ mesh: rock, radius: targetRadius });
+    if (highlightAsteroids) applyHighlightToRock(rock, true);
+  }
+}
+
+function removeAsteroid(index: number): void {
+  const ast = asteroids[index];
+  scene.remove(ast.mesh);
+  asteroids.splice(index, 1);
+}
+
+function handleAsteroidBulletHits(): void {
+  for (let i = asteroids.length - 1; i >= 0; i -= 1) {
+    const ast = asteroids[i];
+    for (let j = player.bullets.length - 1; j >= 0; j -= 1) {
+      const bullet = player.bullets[j];
+      const hitRadius = ast.radius + 1.2;
+      if (bullet.mesh.position.distanceTo(ast.mesh.position) <= hitRadius) {
+        scene.remove(bullet.mesh);
+        player.bullets.splice(j, 1);
+        explosions.trigger(ast.mesh.position, 10);
+        removeAsteroid(i);
+        break;
+      }
+    }
+  }
+}
+
+function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
+  for (let i = asteroids.length - 1; i >= 0; i -= 1) {
+    const ast = asteroids[i];
+    const pos = ast.mesh.position;
+
+    // player collision
+    if (!player.isDestroyed() && pos.distanceTo(player.root.position) <= ast.radius + player.collisionRadius) {
+      explosions.trigger(pos, 16);
+      player.destroy();
+      removeAsteroid(i);
+      continue;
+    }
+
+    // enemy collisions
+    const enemyRoots = enemies.getEnemyRoots();
+    let collided = false;
+    for (const root of enemyRoots) {
+      if (pos.distanceTo(root.position) <= ast.radius + 8) {
+        if (enemies.destroyEnemyByRoot(root)) {
+          explosions.trigger(pos, 16);
+          onEnemyDestroyedCb();
+          removeAsteroid(i);
+          collided = true;
+          break;
+        }
+      }
+    }
+    if (collided) continue;
+  }
+}
+
+function applyHighlightToRock(rock: THREE.Object3D, highlight: boolean): void {
+  rock.traverse(obj => {
+    if ('material' in obj && obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(mat => {
+        const m = mat as THREE.MeshStandardMaterial;
+        if (!m) return;
+        if (highlight) {
+          if (!obj.userData.originalColor) obj.userData.originalColor = m.color.clone();
+          if (!obj.userData.originalEmissive) obj.userData.originalEmissive = m.emissive.clone();
+          m.color.set(0xff5555);
+          m.emissive.set(0xff2222);
+          m.emissiveIntensity = 1.5;
+        } else {
+          if (obj.userData.originalColor) m.color.copy(obj.userData.originalColor);
+          if (obj.userData.originalEmissive) m.emissive.copy(obj.userData.originalEmissive);
+          m.emissiveIntensity = 1;
+        }
+        m.needsUpdate = true;
+      });
+    }
+  });
+}
+
+function applyAsteroidHighlight(highlight: boolean): void {
+  asteroids.forEach(ast => applyHighlightToRock(ast.mesh, highlight));
 }
 
 function setupFullscreenToggle(): void {

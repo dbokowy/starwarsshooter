@@ -1,0 +1,11 @@
+Model Information:
+* title:	Rock scan
+* source:	https://sketchfab.com/3d-models/rock-scan-d57fc168dfcb4a19b7bff3fe70c21bc9
+* author:	laboratorija (https://sketchfab.com/laboratorija)
+
+Model License:
+* license type:	CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
+* requirements:	Author must be credited. No commercial use. Modified versions must have the same license.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Rock scan" (https://sketchfab.com/3d-models/rock-scan-d57fc168dfcb4a19b7bff3fe70c21bc9) by laboratorija (https://sketchfab.com/laboratorija) licensed under CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
