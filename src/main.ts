@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { AudioLoader, AudioListener } from 'three';
 import { CAMERA_RIG, PLAY_AREA, PLAYER_CONFIG, ASSETS_PATH } from './config.js';
 import { createInputController } from './controls.js';
-import { createStarfield, loadEnvironment, loadStarDestroyer, setupLights } from './environment.js';
+import { createSpaceDust, createStarfield, loadEnvironment, loadStarDestroyer, setupLights } from './environment.js';
 import { Hud } from './hud.js';
 import { PlayerController } from './player.js';
 import { CameraRigController } from './camera.js';
@@ -30,6 +30,7 @@ const gestureEvents = ['pointerdown', 'touchstart', 'touchend', 'click'];
 
 const player = new PlayerController(loader, scene, PLAYER_CONFIG, PLAY_AREA, listener);
 const starfield = createStarfield(scene, IS_MOBILE ? 0.45 : 1);
+const spaceDust = createSpaceDust(scene, IS_MOBILE ? 90 : 160);
 let planet: THREE.Object3D | null = null;
 let destroyer: THREE.Object3D | null = null;
 const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
@@ -114,6 +115,9 @@ function update() {
   player.updateFlames(elapsed * 2); // match prior timing scale
   player.updateModelSway(elapsed);
   playerDrift.copy(player.root.position).sub(prevPlayerPos);
+  const playerVelocity = playerDrift.clone().divideScalar(Math.max(delta, 0.0001));
+  const playerForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion).normalize();
+  spaceDust.update(delta, player.root.position, playerVelocity, playerForward);
   starfield.update(delta, playerDrift);
   prevPlayerPos.copy(player.root.position);
   if (planet) planet.rotation.y += delta * 0.005; // slower spin for backdrop planet

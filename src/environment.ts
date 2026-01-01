@@ -9,6 +9,11 @@ export type Starfield = {
   layers: StarLayer[];
 };
 
+export type SpaceDust = {
+  points: THREE.Points;
+  update: (delta: number, playerPos: THREE.Vector3, playerVel: THREE.Vector3, playerForward: THREE.Vector3) => void;
+};
+
 export function setupLights(scene: THREE.Scene, enableShadows: boolean = true): void {
   scene.add(new THREE.HemisphereLight(0x406080, 0x080810, 0.9));
 
@@ -77,13 +82,76 @@ export function createStarfield(scene: THREE.Scene, densityScale: number = 1): S
     layers,
     update: (delta: number, drift: THREE.Vector3 = new THREE.Vector3()) => {
       starGroup.rotation.y += delta * 0.01;
-      // parallax drift opposite to movement to enhance motion
-      if (drift.lengthSq() > 0) {
-        const driftScaled = drift.clone().multiplyScalar(0.3);
-        layers.forEach(layer => {
-          layer.points.position.addScaledVector(driftScaled, -layer.parallax);
-        });
+    }
+  };
+}
+
+export function createSpaceDust(
+  scene: THREE.Scene,
+  count: number = 120,
+  radius: number = 700,
+  size: number = 0.7
+): SpaceDust {
+  const positions = new Float32Array(count * 3);
+  const temp = new THREE.Vector3();
+  const playerOffset = new THREE.Vector3();
+  const randomDir = () => new THREE.Vector3().randomDirection().multiplyScalar(0.55).add(new THREE.Vector3(0, 0, 1)).normalize();
+
+  const respawn = (i: number, playerPos: THREE.Vector3, forward: THREE.Vector3) => {
+    const spread = randomDir().add(forward.clone().multiplyScalar(2)).normalize();
+    const dist = radius * (0.5 + Math.random() * 0.5);
+    const pos = playerPos.clone().add(spread.multiplyScalar(dist));
+    positions[i * 3] = pos.x;
+    positions[i * 3 + 1] = pos.y;
+    positions[i * 3 + 2] = pos.z;
+  };
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    color: 0x6f7072, // neutral gray
+    size,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.65,
+    depthWrite: false
+  });
+  const points = new THREE.Points(geometry, material);
+  points.renderOrder = 2;
+  scene.add(points);
+
+  const positionsVec: THREE.Vector3[] = new Array(count)
+    .fill(0)
+    .map(() => new THREE.Vector3());
+  for (let i = 0; i < count; i += 1) {
+    respawn(i, new THREE.Vector3(), new THREE.Vector3(0, 0, -1));
+    positionsVec[i].set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+  }
+
+  return {
+    points,
+    update: (delta: number, playerPos: THREE.Vector3, playerVel: THREE.Vector3, playerForward: THREE.Vector3) => {
+      const velScale = playerVel.length();
+      const forward = playerForward.clone().normalize();
+      material.opacity = 0.7;
+
+      for (let i = 0; i < count; i += 1) {
+        const pos = positionsVec[i];
+        pos.addScaledVector(playerVel, -delta * 1.45);
+        pos.addScaledVector(forward, -delta * velScale * 0.12);
+        pos.addScaledVector(randomDir(), delta * 6); // slight jitter
+
+        playerOffset.copy(pos).sub(playerPos);
+        if (playerOffset.lengthSq() > radius * radius || playerOffset.dot(forward) < -radius * 0.3) {
+          respawn(i, playerPos, forward);
+          positionsVec[i].set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+        } else {
+          positions[i * 3] = pos.x;
+          positions[i * 3 + 1] = pos.y;
+          positions[i * 3 + 2] = pos.z;
+        }
       }
+      geometry.attributes.position.needsUpdate = true;
     }
   };
 }

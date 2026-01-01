@@ -21,6 +21,8 @@ type EnemyShip = {
   fireDelay: number;
   healthBar: { group: THREE.Object3D; fill: THREE.Mesh };
   boundingRadius: number;
+  hitFlash?: THREE.Sprite;
+  hitFlashTimer: number;
 };
 
 export type Obstacle = {
@@ -47,6 +49,7 @@ export class EnemySquadron {
   private readonly obstacleBuffer = 34;
   private readonly healthBarWidth = 7.2; // 50% longer than before
   private enemyHitPadding = 0;
+  private enemyHitFlashTexture?: THREE.Texture;
   private readonly speedTarget = 170;
   private readonly maxSpeed = 230;
   private readonly maxAccel = 130;
@@ -79,6 +82,8 @@ export class EnemySquadron {
       const root = new THREE.Object3D();
       const model = clone(this.prefab.scene);
       root.add(model);
+      const hitFlash = this.createHitFlash();
+      root.add(hitFlash);
 
       const angle = (i / count) * Math.PI * 2;
       const radius = 130 + Math.random() * 50;
@@ -115,7 +120,9 @@ export class EnemySquadron {
         lastShot: performance.now() - Math.random() * 600,
         fireDelay: 900 + Math.random() * 400,
         healthBar,
-        boundingRadius: baseRadius
+        boundingRadius: baseRadius,
+        hitFlash,
+        hitFlashTimer: 0
       });
     }
   }
@@ -152,6 +159,7 @@ export class EnemySquadron {
       this.updateMovement(enemy, delta, playerPos, obstacles);
       this.updateOrientation(enemy, playerPos);
       this.updateHealthBar(enemy, camera);
+      this.updateHitFlash(enemy, delta, camera);
       this.tryShoot(enemy, playerPos, now);
     }
 
@@ -343,15 +351,16 @@ export class EnemySquadron {
         const distSq = bullet.mesh.position.distanceToSquared(enemy.root.position);
         const hitRadius = Math.pow(enemy.boundingRadius + this.enemyHitPadding, 2);
         if (distSq <= hitRadius) {
-          this.scene.remove(bullet.mesh);
-          player.bullets.splice(j, 1);
-          enemy.health -= 1;
-          this.updateHealthFill(enemy);
-          if (enemy.health <= 0) {
-            this.destroyEnemy(enemy);
-            this.enemies.splice(i, 1);
-            onEnemyDestroyed();
-          }
+        this.scene.remove(bullet.mesh);
+        player.bullets.splice(j, 1);
+        enemy.health -= 1;
+        this.updateHealthFill(enemy);
+        enemy.hitFlashTimer = 0.4;
+        if (enemy.health <= 0) {
+          this.destroyEnemy(enemy);
+          this.enemies.splice(i, 1);
+          onEnemyDestroyed();
+        }
           break;
         }
       }
@@ -375,6 +384,26 @@ export class EnemySquadron {
     enemy.healthBar.fill.position.x = -((1 - pct) * this.healthBarWidth) / 2;
   }
 
+  private updateHitFlash(enemy: EnemyShip, delta: number, camera: THREE.Camera): void {
+    if (!enemy.hitFlash) return;
+    if (enemy.hitFlashTimer <= 0) {
+      enemy.hitFlash.visible = false;
+      return;
+    }
+    enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - delta * 2.5);
+    const t = 1 - enemy.hitFlashTimer / 0.4;
+    const opacity = THREE.MathUtils.lerp(0.85, 0, t);
+    const scale = THREE.MathUtils.lerp(6.5, 8.5, t);
+    const material = enemy.hitFlash.material as THREE.SpriteMaterial;
+    material.opacity = opacity;
+    enemy.hitFlash.scale.set(scale, scale, 1);
+    enemy.hitFlash.visible = opacity > 0.01;
+
+    const dir = camera.position.clone().sub(enemy.root.position).normalize();
+    enemy.hitFlash.position.copy(dir.multiplyScalar(3.5));
+    enemy.hitFlash.lookAt(camera.position);
+  }
+
   private createHealthBar(radius: number): { group: THREE.Object3D; fill: THREE.Mesh } {
     const barGroup = new THREE.Group();
     const bgGeom = new THREE.PlaneGeometry(this.healthBarWidth + 1.2, 1.0); // thicker backdrop
@@ -393,6 +422,44 @@ export class EnemySquadron {
     barGroup.renderOrder = 10;
 
     return { group: barGroup, fill };
+  }
+
+  private createHitFlash(): THREE.Sprite {
+    const material = new THREE.SpriteMaterial({
+      map: this.getHitFlashTexture(),
+      color: 0xff3a3a,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(6.5, 6.5, 1);
+    sprite.renderOrder = 40;
+    return sprite;
+  }
+
+  private getHitFlashTexture(): THREE.Texture {
+    if (this.enemyHitFlashTexture) return this.enemyHitFlashTexture;
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.1, size / 2, size / 2, size * 0.5);
+      gradient.addColorStop(0, 'rgba(255,255,255,0.95)');
+      gradient.addColorStop(0.3, 'rgba(255,70,70,0.55)');
+      gradient.addColorStop(1, 'rgba(255,70,70,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+    }
+    this.enemyHitFlashTexture = new THREE.CanvasTexture(canvas);
+    this.enemyHitFlashTexture.minFilter = THREE.LinearFilter;
+    this.enemyHitFlashTexture.magFilter = THREE.LinearFilter;
+    this.enemyHitFlashTexture.wrapS = this.enemyHitFlashTexture.wrapT = THREE.ClampToEdgeWrapping;
+    return this.enemyHitFlashTexture;
   }
 
   private async loadPrefab(): Promise<LoadedModel> {
