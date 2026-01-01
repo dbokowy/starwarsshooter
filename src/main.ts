@@ -46,7 +46,6 @@ const crosshairEl = document.getElementById('crosshair') as HTMLElement | null;
 const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const controlsModal = document.getElementById('controls-modal') as HTMLElement | null;
 const controlsCloseBtn = document.getElementById('controls-close') as HTMLButtonElement | null;
-const raycaster = new THREE.Raycaster();
 const testExplosionHandler = (event: KeyboardEvent) => {
   if (event.code === 'KeyT') {
     handlePlayerDestroyed();
@@ -163,20 +162,25 @@ function updateCamera() {
 
 function updateCrosshair() {
   if (!crosshairEl) return;
-  // Cast forward from camera to a distant plane to position the crosshair
-  const forward = new THREE.Vector3();
-  camera.getWorldDirection(forward);
-  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(forward, camera.position.clone().add(forward.multiplyScalar(100)));
+  // Anchor the crosshair near the laser convergence line (forward of the muzzle cluster)
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion).normalize();
+  const muzzleAverage = PLAYER_CONFIG.muzzleOffsets
+    .reduce((acc, v) => acc.add(v), new THREE.Vector3())
+    .multiplyScalar(1 / PLAYER_CONFIG.muzzleOffsets.length)
+    .applyQuaternion(player.root.quaternion);
+  const aimOrigin = player.root.position.clone().add(muzzleAverage);
+  const aimDistance = 180; // closer to pull reticle down toward laser convergence
+  const verticalNudge = new THREE.Vector3(0, -1, 0).applyQuaternion(player.root.quaternion).multiplyScalar(6); // slight drop
+  const aimPoint = aimOrigin
+    .clone()
+    .add(forward.clone().multiplyScalar(aimDistance))
+    .add(verticalNudge);
 
-  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-  const point = raycaster.ray.intersectPlane(plane, new THREE.Vector3());
-  if (!point) return;
-
-  const proj = point.project(camera);
-  const x = ((proj.x + 1) / 2) * 100;
-  const y = ((-proj.y + 1) / 2) * 100;
-  crosshairEl.style.left = `${x}%`;
-  crosshairEl.style.top = `${y}%`;
+  const projBase = aimPoint.project(camera);
+  const baseX = ((projBase.x + 1) / 2) * 100;
+  const baseY = ((-projBase.y + 1) / 2) * 100;
+  crosshairEl.style.left = `${baseX}%`;
+  crosshairEl.style.top = `${baseY}%`;
 }
 
 function onResize() {
@@ -321,11 +325,6 @@ function showResult(text: string, isLoss: boolean): void {
   if (!resultModal || !resultMessage) return;
   resultMessage.textContent = text;
   resultModal.classList.remove('hidden');
-  if (resultContinueBtn) resultContinueBtn.style.display = 'none';
-  if (resultReplayBtn) {
-    resultReplayBtn.style.display = 'block';
-    resultReplayBtn.textContent = 'Zagraj ponownie';
-  }
   if (resultRetryBtn) {
     resultRetryBtn.style.display = 'block';
     resultRetryBtn.textContent = 'Zagraj ponownie';
@@ -412,6 +411,7 @@ async function restartGame(): Promise<void> {
   clearWinTimer();
   winPending = false;
   gameStarted = false;
+  if (resultModal) resultModal.classList.add('hidden');
   player.reset();
   await enemies.reset(2, player, destroyer ? destroyer.position : undefined);
   startGame();

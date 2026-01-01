@@ -45,7 +45,8 @@ export class EnemySquadron {
   private readonly healthPerEnemy = 3; // each hit from X-wing removes 1/3
   private readonly avoidanceRadius = 26;
   private readonly obstacleBuffer = 34;
-  private readonly healthBarWidth = 4.8;
+  private readonly healthBarWidth = 7.2; // 50% longer than before
+  private enemyHitPadding = 0;
   private readonly speedTarget = 170;
   private readonly maxSpeed = 230;
   private readonly maxAccel = 130;
@@ -63,6 +64,7 @@ export class EnemySquadron {
   async init(count: number, player: PlayerController, formationOrigin?: THREE.Vector3): Promise<void> {
     this.prefab = await this.loadPrefab();
     const baseRadius = Math.max(this.prefab.size.x, this.prefab.size.y, this.prefab.size.z) * 0.6;
+    this.enemyHitPadding = this.prefab.size.x * 0.3; // expand hit area by ~30% of fighter width
 
     const origin = formationOrigin ? formationOrigin.clone() : player.root.position.clone().add(new THREE.Vector3(0, 0, 400));
     const formationOffsets = [
@@ -339,7 +341,7 @@ export class EnemySquadron {
       for (let j = player.bullets.length - 1; j >= 0; j -= 1) {
         const bullet = player.bullets[j];
         const distSq = bullet.mesh.position.distanceToSquared(enemy.root.position);
-        const hitRadius = Math.pow(enemy.boundingRadius + 1.2, 2);
+        const hitRadius = Math.pow(enemy.boundingRadius + this.enemyHitPadding, 2);
         if (distSq <= hitRadius) {
           this.scene.remove(bullet.mesh);
           player.bullets.splice(j, 1);
@@ -375,8 +377,8 @@ export class EnemySquadron {
 
   private createHealthBar(radius: number): { group: THREE.Object3D; fill: THREE.Mesh } {
     const barGroup = new THREE.Group();
-    const bgGeom = new THREE.PlaneGeometry(this.healthBarWidth + 0.8, 0.5);
-    const fillGeom = new THREE.PlaneGeometry(this.healthBarWidth, 0.34);
+    const bgGeom = new THREE.PlaneGeometry(this.healthBarWidth + 1.2, 1.0); // thicker backdrop
+    const fillGeom = new THREE.PlaneGeometry(this.healthBarWidth, 0.68); // double thickness, longer fill
 
     const bgMat = new THREE.MeshBasicMaterial({ color: 0x0a1b2c, transparent: true, opacity: 0.75, depthWrite: false });
     const fillMat = new THREE.MeshBasicMaterial({ color: 0x5ecbff, transparent: true, opacity: 0.95, depthWrite: false });
@@ -450,5 +452,9 @@ export class EnemySquadron {
 
   getCount(): number {
     return this.enemies.length;
+  }
+
+  getEnemyRoots(): THREE.Object3D[] {
+    return this.enemies.map(e => e.root);
   }
 }
