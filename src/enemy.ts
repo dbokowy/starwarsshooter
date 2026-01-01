@@ -45,8 +45,8 @@ export class EnemySquadron {
   private readonly bulletSpeed = 260;
   private readonly bulletLife = 4;
   private readonly healthPerEnemy = 3; // each hit from X-wing removes 1/3
-  private readonly avoidanceRadius = 26;
-  private readonly obstacleBuffer = 34;
+  private readonly avoidanceRadius = 22;
+  private readonly obstacleBuffer = 30;
   private readonly healthBarWidth = 7.2; // 50% longer than before
   private enemyHitPadding = 0;
   private enemyHitFlashTexture?: THREE.Texture;
@@ -203,6 +203,7 @@ export class EnemySquadron {
     const desiredVel = desiredPos.sub(enemy.root.position).normalize().multiplyScalar(this.speedTarget);
 
     const avoidance = new THREE.Vector3();
+    let asteroidPush = 0;
     this.enemies.forEach(other => {
       if (other === enemy) return;
       const offset = enemy.root.position.clone().sub(other.root.position);
@@ -217,9 +218,15 @@ export class EnemySquadron {
       const dist = offset.length();
       const safeDist = obstacle.radius + this.obstacleBuffer;
       if (dist < safeDist && dist > 0.001) {
-        avoidance.add(offset.normalize().multiplyScalar((safeDist - dist) * 3.2));
+        const strength = (safeDist - dist) * 2.2; // softer push so sometimes they fail to dodge
+        avoidance.add(offset.normalize().multiplyScalar(strength));
+        asteroidPush += 1;
       }
     });
+
+    if (asteroidPush > 0 && Math.random() < 0.08) {
+      avoidance.multiplyScalar(0.35); // occasional intentional failure to dodge
+    }
 
     const steer = desiredVel.add(avoidance).sub(enemy.velocity);
     steer.clampLength(0, this.maxAccel * delta);
@@ -267,14 +274,14 @@ export class EnemySquadron {
     const coreGeometry = new THREE.BoxGeometry(0.12, 0.12, 4.6);
     const glowGeometry = new THREE.BoxGeometry(0.28, 0.28, 5);
     const coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0x9dff7a,
+      color: 0x6dff4a, // brighter green core
       transparent: true,
       opacity: 1,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
     const glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0x4fee2a,
+      color: 0x4aff2e, // vivid green glow
       transparent: true,
       opacity: 0.65,
       blending: THREE.AdditiveBlending,
@@ -368,7 +375,8 @@ export class EnemySquadron {
   }
 
   private destroyEnemy(enemy: EnemyShip): void {
-    this.explosions.trigger(enemy.root.position, 14);
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(enemy.root.quaternion);
+    this.explosions.trigger(enemy.root.position, enemy.boundingRadius * 1.6, forward);
     this.scene.remove(enemy.root);
   }
 

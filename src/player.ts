@@ -122,19 +122,19 @@ export class PlayerController {
     if (now - this.lastShot < 160) return;
     this.lastShot = now;
 
-    const coreGeometry = new THREE.BoxGeometry(0.12, 0.12, 4.8);
-    const glowGeometry = new THREE.BoxGeometry(0.28, 0.28, 5.2);
+    const coreGeometry = new THREE.BoxGeometry(0.1, 0.1, 5.2);
+    const glowGeometry = new THREE.BoxGeometry(0.42, 0.42, 5.8);
     const coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff6a6a,
+      color: 0xffe7d9, // hot white-red core
       transparent: true,
-      opacity: 1,
+      opacity: 0.95,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
     const glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0xe81607,
+      color: 0xff1a00, // saturated red glow
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.82,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
@@ -180,6 +180,10 @@ export class PlayerController {
       return true;
     }
     return false;
+  }
+
+  getBoostRegenRatio(): number {
+    return THREE.MathUtils.clamp(this.overboostRemainingMs / this.overboostBudgetMs, 0, 1);
   }
 
   destroy(): void {
@@ -382,7 +386,7 @@ export class PlayerController {
 
   private updateSpeed(delta: number, input: InputState): void {
     const now = performance.now();
-    const maxBoost = this.config.boostMultiplier; // 4x at full boost
+    const maxBoost = this.config.boostMultiplier; // 10x at full boost
     const regularBoost = 2; // baseline boost gives ~2x speed
 
     let boostFactor = 1;
@@ -392,17 +396,14 @@ export class PlayerController {
       if (!lockActive && this.overboostRemainingMs > 0) {
         boostFactor = maxBoost; // allow top 20% while budget lasts
         this.overboostRemainingMs = Math.max(0, this.overboostRemainingMs - delta * 1000);
-        if (this.overboostRemainingMs === 0) {
-          this.overboostLockedUntil = now + this.overboostCooldownMs;
-        }
       } else {
-        boostFactor = regularBoost; // stay below top 20%
+        // budget spent: clamp to 70% of max until recharge
+        boostFactor = Math.max(regularBoost, maxBoost * 0.7);
       }
     } else {
-      const lockExpired = now >= this.overboostLockedUntil;
-      if (lockExpired && this.overboostRemainingMs === 0) {
-        this.overboostRemainingMs = this.overboostBudgetMs; // recharge after cooldown
-      }
+      // regen while not boosting at same rate as consumption
+      this.overboostLockedUntil = 0;
+      this.overboostRemainingMs = Math.min(this.overboostBudgetMs, this.overboostRemainingMs + delta * 1000);
     }
 
     const targetSpeed = this.config.baseSpeed * boostFactor;

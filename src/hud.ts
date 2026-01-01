@@ -4,12 +4,14 @@ import * as THREE from 'three';
 export class Hud {
   private readonly healthBar: HTMLElement | null;
   private readonly speedBar: HTMLElement | null;
+  private readonly speedBarRegen: HTMLElement | null;
   private lowHealthBlink = false;
   private lastBlink = 0;
 
   constructor(elements: HudElements) {
     this.healthBar = elements.healthBar;
     this.speedBar = elements.speedBar;
+    this.speedBarRegen = document.getElementById('speed-bar-regen');
   }
 
   updateHealth(current: number, max: number): void {
@@ -26,7 +28,7 @@ export class Hud {
     }
   }
 
-  updateSpeed(currentSpeed: number, baseSpeed: number, boostMultiplier: number): void {
+  updateSpeed(currentSpeed: number, baseSpeed: number, boostMultiplier: number, regenRatio: number = 1): void {
     if (!this.speedBar) return;
     const minSpeed = baseSpeed;
     const maxSpeed = baseSpeed * boostMultiplier;
@@ -37,5 +39,11 @@ export class Hud {
     const isOverboost = norm >= 0.8;
     this.speedBar.style.setProperty('--accent', isOverboost ? '#ff513a' : 'var(--speed-accent)');
     this.speedBar.style.setProperty('--glow', isOverboost ? 'rgba(255, 81, 58, 0.55)' : 'rgba(255, 123, 84, 0.4)');
+
+    if (this.speedBarRegen) {
+      const clamped = THREE.MathUtils.clamp(regenRatio, 0, 1);
+      this.speedBarRegen.style.width = `${clamped * 100}%`;
+      this.speedBarRegen.classList.toggle('regen-active', clamped < 1);
+    }
   }
 }

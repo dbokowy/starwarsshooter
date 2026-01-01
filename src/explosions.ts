@@ -3,17 +3,15 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 type ExplosionInstance = {
-  object: THREE.Object3D;
   container: THREE.Group;
   mixer?: THREE.AnimationMixer;
+  shockwave?: THREE.Sprite;
+  particle?: THREE.Points;
   timeLeft: number;
   totalTime: number;
   startScale: number;
-  peakScale: number;
-  settleScale: number;
   endScale: number;
   materials: { mat: THREE.Material & { opacity?: number }; baseOpacity: number }[];
-  particle?: THREE.Points;
 };
 
 export class ExplosionManager {
@@ -39,15 +37,24 @@ export class ExplosionManager {
     this.animations = gltf.animations ?? [];
   }
 
-  trigger(position: THREE.Vector3, scale: number = 16): void {
+  trigger(position: THREE.Vector3, scale: number = 16, forward?: THREE.Vector3): void {
     if (!this.base) return;
-    const scaled = scale * 0.5; // reduce overall size to avoid pixelation
-    const explosion = clone(this.base);
+
     const container = new THREE.Group();
-    container.position.copy(position);
-    const startScale = scaled * 0.25; // start small for bloom pop-in
+    const pos = position.clone();
+    if (forward && forward.lengthSq() > 0.0001) {
+      const n = forward.clone().normalize();
+      const offset = Math.max(scale * 0.6, 6); // push clearly in front of hull
+      pos.add(n.multiplyScalar(offset));
+    }
+    container.position.copy(pos);
+
+    const explosion = clone(this.base);
+    const startScale = scale * 0.07;
+    const finalScale = scale * 2.0; // slightly smaller overall
     container.scale.setScalar(startScale);
 
+    const materials: { mat: THREE.Material & { opacity?: number }; baseOpacity: number }[] = [];
     explosion.traverse(obj => {
       obj.frustumCulled = false;
       const material = (obj as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
@@ -56,8 +63,8 @@ export class ExplosionManager {
         if ('depthWrite' in mat) mat.depthWrite = false;
         if ('fog' in mat) (mat as THREE.Material & { fog?: boolean }).fog = false;
         if ('blending' in mat) mat.blending = THREE.AdditiveBlending;
-        if ('alphaTest' in mat) (mat as THREE.Material & { alphaTest?: number }).alphaTest = 0.08;
-        if ('side' in mat) mat.side = THREE.DoubleSide;
+        if ('color' in mat) (mat as THREE.MeshBasicMaterial).color?.set(0xff4422);
+        if ('emissive' in mat) (mat as THREE.MeshStandardMaterial).emissive?.set(0xcc2200);
         const typed = mat as THREE.Material & { map?: THREE.Texture; emissiveMap?: THREE.Texture };
         const updateTex = (tex?: THREE.Texture) => {
           if (!tex) return;
@@ -68,56 +75,61 @@ export class ExplosionManager {
         };
         updateTex(typed.map);
         updateTex(typed.emissiveMap);
+        const m = mat as THREE.Material & { opacity?: number };
+        if (typeof m.opacity !== 'number' || Number.isNaN(m.opacity)) {
+          // ensure opacity field exists for fade
+          (m as { opacity: number }).opacity = 1;
+        }
+        if (typeof m.opacity === 'number') m.opacity = 1;
+        materials.push({ mat: m, baseOpacity: typeof m.opacity === 'number' ? m.opacity : 1 });
       };
       if (Array.isArray(material)) material.forEach(ensure);
       else if (material) ensure(material);
     });
-    explosion.renderOrder = 30; // draw on top of debris
+
+    explosion.renderOrder = 30;
     container.add(explosion);
 
-    const materials: { mat: THREE.Material & { opacity?: number }; baseOpacity: number }[] = [];
-    explosion.traverse(obj => {
-      if ('material' in obj && obj.material) {
-        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        mats.forEach(mat => {
-          const m = mat as THREE.Material & { opacity?: number };
-          if (typeof m.opacity === 'number') {
-            if (m.opacity === 0) m.opacity = 1;
-            materials.push({ mat: m, baseOpacity: m.opacity });
-          }
-        });
-      }
+    const shockMat = new THREE.SpriteMaterial({
+      map: getShockwaveTexture(),
+      color: 0xffbb88,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending
     });
+    const shockwave = new THREE.Sprite(shockMat);
+    shockwave.scale.setScalar(finalScale * 0.6);
+    shockwave.renderOrder = 31;
+    shockwave.frustumCulled = false;
+    container.add(shockwave);
 
-    const particle = this.createParticles(scaled * 0.1);
+    const particle = this.createParticles(scale * 0.18);
     container.add(particle);
 
-    let mixer: THREE.AnimationMixer | undefined;
-    if (this.animations.length) {
-      mixer = new THREE.AnimationMixer(explosion);
-      mixer.time = 0;
+    const mixer = this.animations.length ? new THREE.AnimationMixer(explosion) : undefined;
+    if (mixer) {
       this.animations.forEach(clip => {
-        const action = mixer!.clipAction(clip.clone(), explosion);
+        const action = mixer.clipAction(clip.clone(), explosion);
         action.reset();
         action.setLoop(THREE.LoopOnce, 1);
         action.clampWhenFinished = true;
         action.play();
       });
-      mixer.update(0); // ensure first frame is applied
+      mixer.update(0);
     }
 
     this.scene.add(container);
     this.active.push({
-      object: explosion,
       container,
       mixer,
-      timeLeft: 1.4,
-      totalTime: 1.4,
+      timeLeft: 1.2,
+      totalTime: 1.2,
       startScale,
-      peakScale: scaled * 1.3,
-      settleScale: scaled * 1,
-      endScale: scaled * 0.6,
+      endScale: finalScale,
       materials,
+      shockwave,
       particle
     });
 
@@ -135,26 +147,41 @@ export class ExplosionManager {
       entry.mixer?.update(delta);
       entry.timeLeft -= delta;
       const t = 1 - entry.timeLeft / entry.totalTime;
-
-      const scale = this.getScaleAt(t, entry.startScale, entry.peakScale, entry.settleScale, entry.endScale);
+      const eased = THREE.MathUtils.smootherstep(Math.min(1, t / 0.45), 0, 1);
+      const scale = THREE.MathUtils.lerp(entry.startScale, entry.endScale, eased);
       entry.container.scale.setScalar(scale);
 
-      const intensity = this.getIntensityAt(t);
+      const fadeStart = 0.6;
+      const fadeT = t < fadeStart ? 0 : (t - fadeStart) / (1 - fadeStart);
+      const intensity = THREE.MathUtils.clamp(1 - fadeT, 0, 1);
+
       entry.materials.forEach(({ mat, baseOpacity }) => {
         if (typeof mat.opacity === 'number') {
           mat.opacity = THREE.MathUtils.clamp(baseOpacity * intensity, 0, 1);
         }
       });
-      if (entry.particle?.material && 'opacity' in entry.particle.material) {
+
+      if (entry.shockwave) {
+        const mat = entry.shockwave.material as THREE.SpriteMaterial;
+        const waveT = THREE.MathUtils.clamp(t, 0, 1);
+        mat.opacity = THREE.MathUtils.lerp(0.9, 0, waveT);
+        const base = entry.endScale * 0.6;
+        entry.shockwave.scale.setScalar(THREE.MathUtils.lerp(base, base * 1.6, waveT));
+      }
+
+      if (entry.particle) {
         const pm = entry.particle.material as THREE.PointsMaterial;
-        pm.opacity = THREE.MathUtils.clamp(intensity, 0, 1);
-        pm.size = 6 + 18 * intensity;
+        pm.opacity = intensity * 0.8;
+        pm.size = THREE.MathUtils.lerp(6, 12, intensity);
       }
 
       if (entry.timeLeft <= 0) {
         if (entry.particle) {
           entry.particle.geometry.dispose();
           (entry.particle.material as THREE.Material).dispose();
+        }
+        if (entry.shockwave) {
+          entry.shockwave.material.dispose();
         }
         this.scene.remove(entry.container);
         this.active.splice(i, 1);
@@ -178,7 +205,7 @@ export class ExplosionManager {
   }
 
   private createParticles(radius: number): THREE.Points {
-    const count = 120;
+    const count = 140;
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i += 1) {
       const dir = new THREE.Vector3(
@@ -193,38 +220,74 @@ export class ExplosionManager {
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
     const material = new THREE.PointsMaterial({
-      color: 0xffe5a0,
-      size: 8,
+      map: getSparkTexture(),
+      color: 0xffe8c0,
+      size: 10,
       sizeAttenuation: true,
       transparent: true,
-      opacity: 1,
+      opacity: 0.9,
       depthWrite: false,
+      depthTest: true,
+      alphaTest: 0.02,
       blending: THREE.AdditiveBlending
     });
-
     const points = new THREE.Points(geometry, material);
     points.frustumCulled = false;
+    points.renderOrder = 29;
     return points;
   }
+}
 
-  private getScaleAt(t: number, start: number, peak: number, settle: number, end: number): number {
-    if (t < 0.18) {
-      const k = t / 0.18;
-      return THREE.MathUtils.lerp(start, peak, k * k * (3 - 2 * k));
-    }
-    if (t < 0.4) {
-      const k = (t - 0.18) / 0.22;
-      return THREE.MathUtils.lerp(peak, settle, k);
-    }
-    const k = (t - 0.4) / 0.6;
-    return THREE.MathUtils.lerp(settle, end, k);
+let cachedShockwave: THREE.Texture | null = null;
+function getShockwaveTexture(): THREE.Texture {
+  if (cachedShockwave) return cachedShockwave;
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const grad = ctx.createRadialGradient(size / 2, size / 2, size * 0.08, size / 2, size / 2, size * 0.5);
+    grad.addColorStop(0, 'rgba(255, 240, 220, 0.7)');
+    grad.addColorStop(0.3, 'rgba(255, 180, 120, 0.5)');
+    grad.addColorStop(1, 'rgba(255, 100, 40, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
   }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.encoding = THREE.sRGBColorSpace;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  cachedShockwave = tex;
+  return tex;
+}
 
-  private getIntensityAt(t: number): number {
-    // No extra brightening; hold opacity, then fade out.
-    if (t < 0.6) return 1;
-    return THREE.MathUtils.lerp(1, 0, (t - 0.6) / 0.4);
+let cachedSpark: THREE.Texture | null = null;
+function getSparkTexture(): THREE.Texture {
+  if (cachedSpark) return cachedSpark;
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    grad.addColorStop(0.25, 'rgba(255, 220, 160, 0.8)');
+    grad.addColorStop(0.6, 'rgba(255, 120, 60, 0.4)');
+    grad.addColorStop(1, 'rgba(255, 120, 60, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
   }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.encoding = THREE.sRGBColorSpace;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  cachedSpark = tex;
+  return tex;
 }

@@ -13,14 +13,15 @@ import { ExplosionManager } from './explosions.js';
 import { EnemySquadron, Obstacle } from './enemy.js';
 
 const IS_MOBILE = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1;
+const loadingManager = new THREE.LoadingManager();
 const renderer = createRenderer(IS_MOBILE);
 const scene = createScene();
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 25000);
 const listener = new AudioListener();
 camera.add(listener);
 const clock = new THREE.Clock();
-const loader = new GLTFLoader();
-const audioLoader = new AudioLoader();
+const loader = new GLTFLoader(loadingManager);
+const audioLoader = new AudioLoader(loadingManager);
 const MUSIC_URL = `${ASSETS_PATH}/darth-maul.ogg`;
 let bgMusicEl: HTMLAudioElement | null = new Audio();
 let musicReady = false;
@@ -52,6 +53,7 @@ const hud = new Hud({
 });
 const crosshairEl = document.getElementById('crosshair') as HTMLElement | null;
 const loadingEl = document.getElementById('loading') as HTMLElement | null;
+const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElement | null;
 const controlsModal = document.getElementById('controls-modal') as HTMLElement | null;
 const controlsCloseBtn = document.getElementById('controls-close') as HTMLButtonElement | null;
 const testExplosionHandler = (event: KeyboardEvent) => {
@@ -76,8 +78,22 @@ let wave = 1;
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
 const startPosition = new THREE.Vector3(0, 0, 40);
+let loadingPct = 0;
 
 init();
+
+loadingManager.onProgress = (_url, loaded, total) => {
+  if (!loadingBarFill || !loadingEl) return;
+  if (total > 0) {
+    const pct = Math.min(100, (loaded / total) * 100);
+    loadingPct = Math.max(loadingPct, pct); // never regress
+    loadingBarFill.style.width = `${loadingPct}%`;
+  }
+};
+loadingManager.onLoad = () => {
+  loadingPct = 100;
+  if (loadingBarFill) loadingBarFill.style.width = '100%';
+};
 
 async function init() {
   document.body.classList.toggle('is-touch', IS_MOBILE);
@@ -141,7 +157,7 @@ function update() {
   explosions.update(delta);
 
   hud.updateHealth(player.health, PLAYER_CONFIG.maxHealth);
-  hud.updateSpeed(player.currentSpeed, PLAYER_CONFIG.baseSpeed, PLAYER_CONFIG.boostMultiplier);
+  hud.updateSpeed(player.currentSpeed, PLAYER_CONFIG.baseSpeed, PLAYER_CONFIG.boostMultiplier, player.getBoostRegenRatio());
 
   renderer.render(scene, camera);
 }
@@ -427,7 +443,8 @@ function handlePlayerDestroyed(): void {
   if (!player.isDestroyed()) {
     player.destroy();
   }
-  explosions.trigger(player.root.position, 18);
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion);
+  explosions.trigger(player.root.position, player.collisionRadius * 1.6, forward);
   enemies.setFireEnabled(false);
   gameStarted = false;
   clearWinTimer();
@@ -492,9 +509,9 @@ async function loadAsteroidPrefabs(): Promise<void> {
 
 function randomAsteroidPosition(): THREE.Vector3 {
   const pos = new THREE.Vector3();
-  const radius = 700; // match space dust envelope
+  const radius = 1050; // 1.5x previous space dust envelope
   do {
-    pos.randomDirection().multiplyScalar(THREE.MathUtils.randFloat(120, radius)).add(startPosition);
+    pos.randomDirection().multiplyScalar(THREE.MathUtils.randFloat(180, radius)).add(startPosition);
   } while (pos.distanceTo(startPosition) < 150); // avoid spawning too close
   return pos;
 }
@@ -505,7 +522,16 @@ async function spawnAsteroids(count: number): Promise<void> {
 
   for (let i = 0; i < count; i += 1) {
     const prefab = asteroidPrefabs[Math.floor(Math.random() * asteroidPrefabs.length)];
-    const targetRadius = player.collisionRadius * THREE.MathUtils.randFloat(0.1, 2.0); // 10%–200% of X-wing size
+    const roll = Math.random();
+    let sizeRand: number;
+    if (roll < 0.9) {
+      sizeRand = THREE.MathUtils.randFloat(0.1, 2.0); // 90%: 10%–200% X-wing
+    } else if (roll < 0.98) {
+      sizeRand = THREE.MathUtils.randFloat(2.0, 4.0); // 8%: 200%–400%
+    } else {
+      sizeRand = THREE.MathUtils.randFloat(4.0, 8.0); // 2%: 400%–800%
+    }
+    const targetRadius = player.collisionRadius * sizeRand;
     const scale = prefab.radius > 0 ? targetRadius / prefab.radius : 1;
     const rock = clone(prefab.scene);
     rock.scale.setScalar(scale);
@@ -550,7 +576,7 @@ function handleAsteroidBulletHits(): void {
       if (bullet.mesh.position.distanceTo(ast.mesh.position) <= hitRadius) {
         scene.remove(bullet.mesh);
         player.bullets.splice(j, 1);
-        explosions.trigger(ast.mesh.position, 10);
+      explosions.trigger(ast.mesh.position, ast.radius * 1.4);
         removeAsteroid(i);
         break;
       }
@@ -565,7 +591,7 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
 
     // player collision
     if (!player.isDestroyed() && pos.distanceTo(player.root.position) <= ast.radius + player.collisionRadius) {
-      explosions.trigger(pos, 16);
+      explosions.trigger(pos, player.collisionRadius * 1.6);
       player.destroy();
       removeAsteroid(i);
       continue;
@@ -577,7 +603,7 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
     for (const root of enemyRoots) {
       if (pos.distanceTo(root.position) <= ast.radius + 8) {
         if (enemies.destroyEnemyByRoot(root)) {
-          explosions.trigger(pos, 16);
+          explosions.trigger(pos, player.collisionRadius * 1.6);
           onEnemyDestroyedCb();
           removeAsteroid(i);
           collided = true;
