@@ -58,7 +58,14 @@ const testExplosionHandler = (event: KeyboardEvent) => {
 const immortalityBtn = document.getElementById('toggle-immortal') as HTMLButtonElement | null;
 const enemyFireBtn = document.getElementById('toggle-enemy-fire') as HTMLButtonElement | null;
 const enemyExplosionBtn = document.getElementById('trigger-enemy-explosion') as HTMLButtonElement | null;
+const resultModal = document.getElementById('result-modal') as HTMLElement | null;
+const resultMessage = document.getElementById('result-message') as HTMLElement | null;
+const resultReplayBtn = document.getElementById('result-replay') as HTMLButtonElement | null;
+const resultContinueBtn = document.getElementById('result-continue') as HTMLButtonElement | null;
 let immortal = false;
+let gameStarted = false;
+let winPending = false;
+let winTimer: number | null = null;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
@@ -101,7 +108,9 @@ function update() {
 
   player.update(delta, inputController.state);
   player.updateBullets(delta);
-  enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit);
+  if (gameStarted && !player.isDestroyed()) {
+    enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit, onEnemyDestroyed);
+  }
   updateCamera();
   player.updateFlames(elapsed * 2); // match prior timing scale
   player.updateModelSway(elapsed);
@@ -254,6 +263,7 @@ function showControlsModal() {
   controlsModal.classList.remove('hidden');
   controlsCloseBtn.addEventListener('click', () => {
     controlsModal.classList.add('hidden');
+    startGame();
   });
 }
 
@@ -263,6 +273,10 @@ function onPlayerHit(): void {
   const destroyed = player.takeDamage(damage);
   if (destroyed) {
     explosions.trigger(player.root.position, 18);
+    enemies.setFireEnabled(false);
+    gameStarted = false;
+    showResult('Przegrana', true);
+    clearWinTimer();
   }
 }
 
@@ -275,6 +289,41 @@ function buildObstacles(): Obstacle[] {
     list.push({ position: destroyer.position, radius: 420 });
   }
   return list;
+}
+
+function onEnemyDestroyed(): void {
+  if (enemies.getCount() === 0 && !winPending && !player.isDestroyed()) {
+    winPending = true;
+    winTimer = window.setTimeout(() => {
+      showResult('Wygrana!', false);
+    }, 5000);
+  }
+}
+
+function startGame(): void {
+  gameStarted = true;
+  enemies.setActive(true);
+  enemies.setFireEnabled(true);
+  if (resultModal) resultModal.classList.add('hidden');
+  clearWinTimer();
+  winPending = false;
+}
+
+function showResult(text: string, isLoss: boolean): void {
+  if (!resultModal || !resultMessage) return;
+  resultMessage.textContent = text;
+  resultModal.classList.remove('hidden');
+  if (isLoss) {
+    enemies.setActive(false);
+    enemies.setFireEnabled(false);
+  }
+}
+
+function clearWinTimer(): void {
+  if (winTimer !== null) {
+    window.clearTimeout(winTimer);
+    winTimer = null;
+  }
 }
 
 function bindToggles(): void {
@@ -291,16 +340,30 @@ function bindToggles(): void {
   if (enemyFireBtn) {
     enemyFireBtn.addEventListener('click', () => {
       const active = enemyFireBtn.classList.toggle('active');
-      enemyFireBtn.textContent = active ? 'Ogień Wrogow: ON' : 'Ogień Wrogow: OFF';
+      enemyFireBtn.textContent = active ? 'Ogien Wrogow: ON' : 'Ogien Wrogow: OFF';
       enemies.setFireEnabled(active);
     });
-    enemyFireBtn.textContent = 'Ogień Wrogow: ON';
+    enemyFireBtn.textContent = 'Ogien Wrogow: ON';
     enemyFireBtn.classList.add('active');
   }
 
   if (enemyExplosionBtn) {
     enemyExplosionBtn.addEventListener('click', () => {
       enemies.debugExplodeOne();
+    });
+  }
+
+  if (resultReplayBtn) {
+    resultReplayBtn.addEventListener('click', () => {
+      window.location.reload();
+    });
+  }
+
+  if (resultContinueBtn) {
+    resultContinueBtn.addEventListener('click', () => {
+      if (resultModal) resultModal.classList.add('hidden');
+      enemies.setActive(false);
+      enemies.setFireEnabled(false);
     });
   }
 }

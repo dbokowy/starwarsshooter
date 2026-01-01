@@ -51,6 +51,7 @@ export class EnemySquadron {
   private readonly maxAccel = 130;
   private readonly aimSpread = 0.3; // larger spread = less accurate
   private readonly approachDuration = 10; // seconds to fly in from destroyer
+  private active = false;
 
   constructor(
     private readonly loader: GLTFLoader,
@@ -117,8 +118,16 @@ export class EnemySquadron {
     }
   }
 
-  update(delta: number, player: PlayerController, camera: THREE.Camera, obstacles: Obstacle[], now: number, onPlayerHit: () => void): void {
-    if (!this.prefab) return;
+  update(
+    delta: number,
+    player: PlayerController,
+    camera: THREE.Camera,
+    obstacles: Obstacle[],
+    now: number,
+    onPlayerHit: () => void,
+    onEnemyDestroyed: () => void
+  ): void {
+    if (!this.prefab || !this.active) return;
     const playerPos = player.root.position;
 
     for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
@@ -131,7 +140,7 @@ export class EnemySquadron {
 
     this.updateBullets(delta);
     this.handleEnemyHitsPlayer(player, onPlayerHit);
-    this.handlePlayerHitsEnemies(player);
+    this.handlePlayerHitsEnemies(player, onEnemyDestroyed);
   }
 
   private updateMovement(enemy: EnemyShip, delta: number, playerPos: THREE.Vector3, obstacles: Obstacle[]): void {
@@ -298,7 +307,7 @@ export class EnemySquadron {
     }
   }
 
-  private handlePlayerHitsEnemies(player: PlayerController): void {
+  private handlePlayerHitsEnemies(player: PlayerController, onEnemyDestroyed: () => void): void {
     for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
       const enemy = this.enemies[i];
       for (let j = player.bullets.length - 1; j >= 0; j -= 1) {
@@ -313,6 +322,7 @@ export class EnemySquadron {
           if (enemy.health <= 0) {
             this.destroyEnemy(enemy);
             this.enemies.splice(i, 1);
+            onEnemyDestroyed();
           }
           break;
         }
@@ -406,5 +416,13 @@ export class EnemySquadron {
         error => reject(error)
       );
     });
+  }
+
+  setActive(active: boolean): void {
+    this.active = active;
+  }
+
+  getCount(): number {
+    return this.enemies.length;
   }
 }
