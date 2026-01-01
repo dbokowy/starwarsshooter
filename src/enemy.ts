@@ -49,7 +49,7 @@ export class EnemySquadron {
   private readonly speedTarget = 170;
   private readonly maxSpeed = 230;
   private readonly maxAccel = 130;
-  private readonly aimSpread = 0.3; // larger spread = less accurate
+  private readonly aimSpread = 0.18; // tighter for hits; explicit miss logic decides off-target shots
   private readonly approachDuration = 10; // seconds to fly in from destroyer
   private active = false;
 
@@ -116,6 +116,21 @@ export class EnemySquadron {
         boundingRadius: baseRadius
       });
     }
+  }
+
+  async reset(count: number, player: PlayerController, formationOrigin?: THREE.Vector3): Promise<void> {
+    // remove existing enemies
+    this.enemies.forEach(e => {
+      this.scene.remove(e.root);
+    });
+    this.enemies.length = 0;
+    // remove enemy bullets
+    for (let i = this.bullets.length - 1; i >= 0; i -= 1) {
+      this.scene.remove(this.bullets[i].mesh);
+    }
+    this.bullets.length = 0;
+    this.active = false;
+    await this.init(count, player, formationOrigin);
   }
 
   update(
@@ -267,13 +282,24 @@ export class EnemySquadron {
       laser.position.copy(enemy.root.position).add(worldOffset);
       laser.position.add(forward.clone().multiplyScalar(1.4));
 
-      // slight aim jitter so shots feel less perfect
-      const jitter = new THREE.Vector3(
-        THREE.MathUtils.randFloatSpread(this.aimSpread),
-        THREE.MathUtils.randFloatSpread(this.aimSpread),
-        THREE.MathUtils.randFloatSpread(this.aimSpread)
-      );
-      const aimDir = playerPos.clone().add(jitter).sub(laser.position).normalize();
+      const missShot = Math.random() < 0.5; // 50% of shots are deliberate near-misses
+      const targetPos = playerPos.clone();
+      if (missShot) {
+        const missRadius = 10 + Math.random() * 12;
+        const offsetDir = new THREE.Vector3().randomDirection();
+        targetPos.add(offsetDir.multiplyScalar(missRadius));
+      } else {
+        // slight aim jitter so shots feel less perfect even when intended to hit
+        targetPos.add(
+          new THREE.Vector3(
+            THREE.MathUtils.randFloatSpread(this.aimSpread),
+            THREE.MathUtils.randFloatSpread(this.aimSpread),
+            THREE.MathUtils.randFloatSpread(this.aimSpread)
+          )
+        );
+      }
+
+      const aimDir = targetPos.sub(laser.position).normalize();
       laser.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), aimDir); // align beam to travel direction
       const velocity = aimDir.multiplyScalar(this.bulletSpeed);
 

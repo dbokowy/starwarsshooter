@@ -35,6 +35,8 @@ let destroyer: THREE.Object3D | null = null;
 const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
 const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, renderer.capabilities.getMaxAnisotropy());
 const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
+const prevPlayerPos = new THREE.Vector3();
+const playerDrift = new THREE.Vector3();
 
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
@@ -47,12 +49,7 @@ const controlsCloseBtn = document.getElementById('controls-close') as HTMLButton
 const raycaster = new THREE.Raycaster();
 const testExplosionHandler = (event: KeyboardEvent) => {
   if (event.code === 'KeyT') {
-    if (!player.isDestroyed()) {
-      player.destroy();
-      explosions.trigger(player.root.position, 18);
-    } else {
-      explosions.trigger(player.root.position, 18);
-    }
+    handlePlayerDestroyed();
   }
 };
 const immortalityBtn = document.getElementById('toggle-immortal') as HTMLButtonElement | null;
@@ -60,8 +57,8 @@ const enemyFireBtn = document.getElementById('toggle-enemy-fire') as HTMLButtonE
 const enemyExplosionBtn = document.getElementById('trigger-enemy-explosion') as HTMLButtonElement | null;
 const resultModal = document.getElementById('result-modal') as HTMLElement | null;
 const resultMessage = document.getElementById('result-message') as HTMLElement | null;
-const resultReplayBtn = document.getElementById('result-replay') as HTMLButtonElement | null;
-const resultContinueBtn = document.getElementById('result-continue') as HTMLButtonElement | null;
+const resultRetryBtn = document.getElementById('result-retry') as HTMLButtonElement | null;
+const fullscreenBtn = document.getElementById('fullscreen-btn') as HTMLButtonElement | null;
 let immortal = false;
 let gameStarted = false;
 let winPending = false;
@@ -80,7 +77,8 @@ async function init() {
     destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
   }
   audioLoader.load(`${ASSETS_PATH}/tie-fighter-fire-1.mp3`, buffer => player.setFireSound(buffer));
-  audioLoader.load(`${ASSETS_PATH}/explosion-fx-425453.mp3`, buffer => explosions.setSoundBuffer(buffer));
+  audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => player.setHitSound(buffer));
+  audioLoader.load(`${ASSETS_PATH}/explosion-fx-2.mp3`, buffer => explosions.setSoundBuffer(buffer));
   await explosions.init();
   loadBackgroundMusic();
   await player.loadModel(
@@ -91,11 +89,13 @@ async function init() {
   );
   await enemies.init(2, player, destroyer ? destroyer.position : undefined);
   hideLoading();
+  prevPlayerPos.copy(player.root.position);
 
   smoothedLook.copy(player.root.position).add(CAMERA_RIG.lookOffset);
   window.addEventListener('resize', onResize);
   window.addEventListener('keydown', testExplosionHandler);
   bindToggles();
+  setupFullscreenToggle();
   onResize();
   renderer.setAnimationLoop(update);
   showControlsModal();
@@ -114,7 +114,9 @@ function update() {
   updateCamera();
   player.updateFlames(elapsed * 2); // match prior timing scale
   player.updateModelSway(elapsed);
-  starfield.update(delta);
+  playerDrift.copy(player.root.position).sub(prevPlayerPos);
+  starfield.update(delta, playerDrift);
+  prevPlayerPos.copy(player.root.position);
   if (planet) planet.rotation.y += delta * 0.005; // slower spin for backdrop planet
   updateCrosshair();
   explosions.update(delta);
@@ -136,13 +138,26 @@ function updateCamera() {
   const offset = rigOffsets.cameraOffset.clone().multiplyScalar(cameraPullback);
 
   const desiredPosition = offset.applyQuaternion(player.root.quaternion).add(player.root.position);
-  camera.position.lerp(desiredPosition, 0.1);
+  // add subtle speed-based shake
+  const shakeStrength = throttle * 0.08;
+  const shake = new THREE.Vector3(
+    THREE.MathUtils.randFloatSpread(shakeStrength),
+    THREE.MathUtils.randFloatSpread(shakeStrength * 0.7),
+    THREE.MathUtils.randFloatSpread(shakeStrength * 0.6)
+  );
+
+  camera.position.lerp(desiredPosition.add(shake), 0.12);
 
   const lookTarget = rigOffsets.lookOffset.clone().applyQuaternion(player.root.quaternion).add(player.root.position);
   smoothedLook.lerp(lookTarget, 0.2);
   camera.lookAt(smoothedLook);
 
-  // Blur disabled for clarity at high speed.
+  // Dynamic FOV tied to throttle
+  const baseFov = 70;
+  const targetFov = THREE.MathUtils.lerp(baseFov, baseFov + 10, throttle);
+  camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.1);
+  camera.updateProjectionMatrix();
+
   renderer.domElement.style.filter = '';
 }
 
@@ -272,11 +287,7 @@ function onPlayerHit(): void {
   const damage = PLAYER_CONFIG.maxHealth * 0.05; // 1/20th of max
   const destroyed = player.takeDamage(damage);
   if (destroyed) {
-    explosions.trigger(player.root.position, 18);
-    enemies.setFireEnabled(false);
-    gameStarted = false;
-    showResult('Przegrana', true);
-    clearWinTimer();
+    handlePlayerDestroyed();
   }
 }
 
@@ -293,10 +304,7 @@ function buildObstacles(): Obstacle[] {
 
 function onEnemyDestroyed(): void {
   if (enemies.getCount() === 0 && !winPending && !player.isDestroyed()) {
-    winPending = true;
-    winTimer = window.setTimeout(() => {
-      showResult('Wygrana!', false);
-    }, 5000);
+    handleVictory();
   }
 }
 
@@ -313,10 +321,17 @@ function showResult(text: string, isLoss: boolean): void {
   if (!resultModal || !resultMessage) return;
   resultMessage.textContent = text;
   resultModal.classList.remove('hidden');
-  if (isLoss) {
-    enemies.setActive(false);
-    enemies.setFireEnabled(false);
+  if (resultContinueBtn) resultContinueBtn.style.display = 'none';
+  if (resultReplayBtn) {
+    resultReplayBtn.style.display = 'block';
+    resultReplayBtn.textContent = 'Zagraj ponownie';
   }
+  if (resultRetryBtn) {
+    resultRetryBtn.style.display = 'block';
+    resultRetryBtn.textContent = 'Zagraj ponownie';
+  }
+  enemies.setActive(false);
+  enemies.setFireEnabled(false);
 }
 
 function clearWinTimer(): void {
@@ -353,17 +368,51 @@ function bindToggles(): void {
     });
   }
 
-  if (resultReplayBtn) {
-    resultReplayBtn.addEventListener('click', () => {
-      window.location.reload();
+  if (resultRetryBtn) {
+    resultRetryBtn.addEventListener('click', () => {
+      restartGame();
     });
   }
+}
 
-  if (resultContinueBtn) {
-    resultContinueBtn.addEventListener('click', () => {
-      if (resultModal) resultModal.classList.add('hidden');
-      enemies.setActive(false);
-      enemies.setFireEnabled(false);
-    });
+function handlePlayerDestroyed(): void {
+  if (!player.isDestroyed()) {
+    player.destroy();
   }
+  explosions.trigger(player.root.position, 18);
+  enemies.setFireEnabled(false);
+  gameStarted = false;
+  clearWinTimer();
+  showResult('Przegrana', true);
+}
+
+function handleVictory(): void {
+  winPending = false;
+  clearWinTimer();
+  showResult('Zwyciestwo', false);
+}
+
+function setupFullscreenToggle(): void {
+  if (!fullscreenBtn) return;
+  const updateState = () => {
+    fullscreenBtn.classList.toggle('active', !!document.fullscreenElement);
+  };
+  fullscreenBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => undefined);
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => undefined);
+    }
+  });
+  document.addEventListener('fullscreenchange', updateState);
+  updateState();
+}
+
+async function restartGame(): Promise<void> {
+  clearWinTimer();
+  winPending = false;
+  gameStarted = false;
+  player.reset();
+  await enemies.reset(2, player, destroyer ? destroyer.position : undefined);
+  startGame();
 }

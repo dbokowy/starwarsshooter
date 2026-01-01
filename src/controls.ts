@@ -63,6 +63,7 @@ export function createInputController(target: HTMLElement, onShoot: () => void):
 
   const handlePointer = (event: PointerEvent) => {
     if ((event.target as HTMLElement | null)?.closest('#mobile-ui')) return; // ignore taps on HUD buttons
+    if (event.button !== 0) return; // only left click shoots; right click reserved for camera orbit
     onShoot();
   };
 

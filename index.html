@@ -47,6 +47,11 @@
       </div>
     </div>
   </div>
+  <div id="fullscreen-button-wrapper">
+    <button id="fullscreen-btn" class="icon-btn fullscreen-btn icon-fullscreen" aria-label="Pełny ekran">
+      <span class="sr-only">Pelny ekran</span>
+    </button>
+  </div>
   <div id="debug-toggles">
     <button id="toggle-immortal" class="toggle-btn">Niesmiertelnosc: OFF</button>
     <button id="toggle-enemy-fire" class="toggle-btn">Ogien Wrogow: ON</button>
@@ -60,7 +65,7 @@
         <li><strong>A / D</strong> - obrot w lewo/prawo</li>
         <li><strong>Shift</strong> - przyspieszenie (booster)</li>
         <li><strong>LPM</strong> - strzal</li>
-        <li><strong>PPM</strong> - obrot kamery</li>
+        <li><strong>PPM</strong> - spojrzenie za X-winga (przytrzymaj)</li>
         <li><strong>Q / E</strong> - beczka w lewo / prawo</li>
       </ul>
       <ul class="mobile-controls">
@@ -76,8 +81,7 @@
     <div class="controls-card">
       <h2 id="result-message"></h2>
       <div class="inline-buttons result-buttons">
-        <button id="result-replay" class="mobile-btn primary">Zagraj ponownie</button>
-        <button id="result-continue" class="mobile-btn ghost">Lataj dalej</button>
+        <button id="result-retry" class="mobile-btn primary result-retry-btn">Zagraj ponownie</button>
       </div>
     </div>
   </div>

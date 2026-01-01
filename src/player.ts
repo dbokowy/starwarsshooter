@@ -18,6 +18,7 @@ export class PlayerController {
   health: number;
   readonly bullets: Bullet[] = [];
   readonly collisionRadius = 6.5;
+  private readonly startPosition = new THREE.Vector3(0, 0, 40);
   private lastShot = 0;
   private readonly engineFlames: EngineFlames;
   private fireBuffer: AudioBuffer | null = null;
@@ -36,6 +37,9 @@ export class PlayerController {
   private hitFlash?: THREE.Mesh;
   private hitFlashTimer = 0;
   private readonly hitFlashDuration = 0.35;
+  private hitSoundBuffer: AudioBuffer | null = null;
+  private wingTrails: THREE.Mesh[] = [];
+  private readonly trailsEnabled = false;
 
   constructor(
     private readonly loader: GLTFLoader,
@@ -47,12 +51,16 @@ export class PlayerController {
     this.currentSpeed = config.baseSpeed;
     this.health = config.maxHealth;
     this.engineFlames = new EngineFlames(this.root, config.flameOffsets);
-    this.root.position.set(0, 0, 40);
+    this.root.position.copy(this.startPosition);
     this.scene.add(this.root);
   }
 
   setFireSound(buffer: AudioBuffer): void {
     this.fireBuffer = buffer;
+  }
+
+  setHitSound(buffer: AudioBuffer): void {
+    this.hitSoundBuffer = buffer;
   }
 
   async loadModel(path: string, rotation: THREE.Euler, scale: number, positionOffset: THREE.Vector3 = new THREE.Vector3(0, 0, 0)): Promise<void> {
@@ -65,6 +73,7 @@ export class PlayerController {
     this.root.add(model);
     this.engineFlames.attach(); // keep previous relative offsets (parented to root)
     this.addHitFlash();
+    this.addWingTrails();
   }
 
   update(delta: number, input: InputState): void {
@@ -92,6 +101,7 @@ export class PlayerController {
   updateFlames(time: number): void {
     if (this.destroyed) return;
     this.engineFlames.update(this.currentSpeed, this.config.baseSpeed, this.config.boostMultiplier, time, this.getRollBend());
+    this.updateWingTrails();
   }
 
   updateModelSway(time: number): void {
@@ -105,8 +115,8 @@ export class PlayerController {
     if (now - this.lastShot < 160) return;
     this.lastShot = now;
 
-    const coreGeometry = new THREE.BoxGeometry(0.12, 0.12, 4.8);
-    const glowGeometry = new THREE.BoxGeometry(0.28, 0.28, 5.2);
+    const coreGeometry = new THREE.BoxGeometry(5.6, -0.9, -3.2);
+    const glowGeometry = new THREE.BoxGeometry(5.6, -0.9, -3.2);
     const coreMaterial = new THREE.MeshBasicMaterial({
       color: 0xff6a6a,
       transparent: true,
@@ -152,6 +162,12 @@ export class PlayerController {
     if (this.destroyed) return false;
     this.health = Math.max(0, this.health - amount);
     this.hitFlashTimer = this.hitFlashDuration;
+    if (this.hitSoundBuffer) {
+      const hitSound = new THREE.Audio(this.listener);
+      hitSound.setBuffer(this.hitSoundBuffer);
+      hitSound.setVolume(0.55);
+      hitSound.play();
+    }
     if (this.health === 0) {
       this.destroy();
       return true;
@@ -165,6 +181,27 @@ export class PlayerController {
     this.health = 0;
     this.currentSpeed = 0;
     this.setShipVisible(false);
+  }
+
+  reset(): void {
+    this.destroyed = false;
+    this.health = this.config.maxHealth;
+    this.currentSpeed = this.config.baseSpeed;
+    this.root.position.copy(this.startPosition);
+    this.root.rotation.set(0, 0, 0);
+    this.setShipVisible(true);
+    this.rolling = false;
+    this.rollTime = 0;
+    this.rollLatch = false;
+    this.hitFlashTimer = 0;
+    if (this.model && this.model.userData.baseRotation) {
+      this.model.rotation.copy(this.model.userData.baseRotation);
+    }
+    // clear player bullets
+    for (let i = this.bullets.length - 1; i >= 0; i -= 1) {
+      this.scene.remove(this.bullets[i].mesh);
+    }
+    this.bullets.length = 0;
   }
 
   setShipVisible(visible: boolean): void {
@@ -187,7 +224,7 @@ export class PlayerController {
     const now = performance.now();
     if (now - this.lastRollTimestamp < this.rollCooldownMs) return;
     if (rollHeld) {
-      this.startRoll(input.rollLeft ? -1 : 1);
+      this.startRoll(input.rollLeft ? 1 : -1); // swap to match intended Q/E directions
       this.rollLatch = true;
       this.lastRollTimestamp = now;
     }
@@ -218,7 +255,7 @@ export class PlayerController {
       fog: false
     });
     const flash = new THREE.Sprite(material);
-    const size = 3.4;
+    const size = 5.1; // 50% larger hit flash
     flash.scale.set(size, size, 1);
     flash.name = 'hit-flash';
     flash.renderOrder = 50;
@@ -264,6 +301,53 @@ export class PlayerController {
     this.hitFlashTexture.magFilter = THREE.LinearFilter;
     this.hitFlashTexture.wrapS = this.hitFlashTexture.wrapT = THREE.ClampToEdgeWrapping;
     return this.hitFlashTexture;
+  }
+
+  private addWingTrails(): void {
+    if (!this.trailsEnabled) return;
+    const trailGeometry = new THREE.CylinderGeometry(0.12, 0.06, 4.2, 8, 1, true);
+    const trailMaterial = new THREE.MeshBasicMaterial({
+      color: 0x63d8ff,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+
+    const offsets = [
+      new THREE.Vector3(2.6, -0.25, 4.8),
+      new THREE.Vector3(-2.6, 1, 4.8)
+    ];
+
+    offsets.forEach(offset => {
+      const trail = new THREE.Mesh(trailGeometry, trailMaterial.clone());
+      trail.rotation.x = -Math.PI / 2; // flip 180 deg so tip faces forward, base at thruster
+      trail.position.copy(offset);
+      trail.renderOrder = 12;
+      this.root.add(trail);
+      this.wingTrails.push(trail);
+    });
+  }
+
+  private updateWingTrails(): void {
+    if (!this.trailsEnabled) return;
+    if (!this.wingTrails.length) return;
+    const speedRatio = THREE.MathUtils.clamp(
+      (this.currentSpeed - this.config.baseSpeed * 0.8) / (this.config.baseSpeed * this.config.boostMultiplier - this.config.baseSpeed * 0.8),
+      0,
+      1
+    );
+    const opacity = THREE.MathUtils.lerp(0, 0.6, speedRatio);
+    const lengthScale = THREE.MathUtils.lerp(0.6, 1.6, speedRatio);
+
+    this.wingTrails.forEach(trail => {
+      const mat = trail.material as THREE.MeshBasicMaterial;
+      mat.opacity = speedRatio >= 0.8 ? opacity : 0;
+      trail.scale.setScalar(1);
+      trail.scale.z = lengthScale;
+      trail.visible = mat.opacity > 0.02;
+    });
   }
 
   private async load(path: string): Promise<THREE.Object3D> {
@@ -333,7 +417,8 @@ export class PlayerController {
     const pitchChange = ((input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0)) * delta * 1.3;
 
     this.root.rotation.y += yawChange;
-    this.root.rotation.x = THREE.MathUtils.clamp(this.root.rotation.x + pitchChange, -Math.PI / 3, Math.PI / 3);
+    const maxPitch = Math.PI / 3 + THREE.MathUtils.degToRad(15); // allow an extra 15° up/down
+    this.root.rotation.x = THREE.MathUtils.clamp(this.root.rotation.x + pitchChange, -maxPitch, maxPitch);
 
     const targetRoll = THREE.MathUtils.clamp(((input.left ? 1 : 0) - (input.right ? 1 : 0)) * 0.4, -0.6, 0.6);
 
@@ -359,7 +444,6 @@ export class PlayerController {
     this.root.position.y = Math.max(this.playArea.minY, Math.min(this.playArea.maxY, this.root.position.y));
   }
 }
-
 
 
 

@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
+export type StarLayer = { points: THREE.Points; parallax: number };
+
 export type Starfield = {
   group: THREE.Group;
-  update: (delta: number) => void;
+  update: (delta: number, drift?: THREE.Vector3) => void;
+  layers: StarLayer[];
 };
 
 export function setupLights(scene: THREE.Scene, enableShadows: boolean = true): void {
@@ -25,6 +28,7 @@ export function setupLights(scene: THREE.Scene, enableShadows: boolean = true): 
 export function createStarfield(scene: THREE.Scene, densityScale: number = 1): Starfield {
   const starGroup = new THREE.Group();
   const density = THREE.MathUtils.clamp(densityScale, 0.2, 1);
+  const layers: StarLayer[] = [];
 
   const fillShell = (count: number, minRadius: number, maxRadius: number): Float32Array => {
     const positions = new Float32Array(count * 3);
@@ -42,7 +46,7 @@ export function createStarfield(scene: THREE.Scene, densityScale: number = 1): S
     return positions;
   };
 
-  const makeLayer = (opts: { count: number; size: number; minRadius: number; maxRadius: number; color: number; opacity: number }) => {
+  const makeLayer = (opts: { count: number; size: number; minRadius: number; maxRadius: number; color: number; opacity: number; parallax: number }) => {
     const positions = fillShell(Math.floor(opts.count * density), opts.minRadius, opts.maxRadius);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -59,18 +63,27 @@ export function createStarfield(scene: THREE.Scene, densityScale: number = 1): S
 
     const points = new THREE.Points(geometry, material);
     starGroup.add(points);
+    layers.push({ points, parallax: opts.parallax });
   };
 
-  makeLayer({ count: 2400, size: 0.9, minRadius: 9000, maxRadius: 18000, color: 0xcde7ff, opacity: 0.7 });
-  makeLayer({ count: 900, size: 1.5, minRadius: 7000, maxRadius: 15000, color: 0x9fd5ff, opacity: 0.85 });
-  makeLayer({ count: 260, size: 2.6, minRadius: 6000, maxRadius: 13000, color: 0xffffff, opacity: 0.95 });
+  makeLayer({ count: 2400, size: 0.9, minRadius: 9000, maxRadius: 18000, color: 0xcde7ff, opacity: 0.7, parallax: 0.6 });
+  makeLayer({ count: 900, size: 1.5, minRadius: 7000, maxRadius: 15000, color: 0x9fd5ff, opacity: 0.85, parallax: 1 });
+  makeLayer({ count: 260, size: 2.6, minRadius: 6000, maxRadius: 13000, color: 0xffffff, opacity: 0.95, parallax: 1.4 });
 
   scene.add(starGroup);
 
   return {
     group: starGroup,
-    update: (delta: number) => {
+    layers,
+    update: (delta: number, drift: THREE.Vector3 = new THREE.Vector3()) => {
       starGroup.rotation.y += delta * 0.01;
+      // parallax drift opposite to movement to enhance motion
+      if (drift.lengthSq() > 0) {
+        const driftScaled = drift.clone().multiplyScalar(0.3);
+        layers.forEach(layer => {
+          layer.points.position.addScaledVector(driftScaled, -layer.parallax);
+        });
+      }
     }
   };
 }

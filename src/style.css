@@ -189,19 +189,49 @@ canvas {
 
 .result-buttons {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 12px;
+  margin: 14px auto 0;
+  width: 100%;
 }
 
 .result-buttons .mobile-btn {
-  width: auto;
-  min-width: 140px;
+  width: 220px;
+  max-width: 260px;
+}
+
+.inline-buttons.result-buttons {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center;
+  width: 100%;
+}
+
+#result-modal .mobile-btn {
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  min-height: 42px;
+  text-transform: uppercase;
+  color: #041019;
+  background: linear-gradient(90deg, #0b9dda, #0fd0ff);
+  border-color: rgba(94, 203, 255, 0.8);
+  box-shadow: 0 0 16px rgba(11, 216, 255, 0.28), inset 0 0 10px rgba(11, 216, 255, 0.32);
+}
+
+#result-retry {
+  width: 100%;
+  margin-top: 18px;
+  display: block;
+  max-width: 400px;
 }
 
 #result-message {
   text-align: center;
   width: 100%;
+  margin-bottom: 8px;
 }
 
 #controls-close {
@@ -539,7 +569,7 @@ body.roll-blur canvas {
 #debug-toggles {
   position: fixed;
   top: 12px;
-  right: 12px;
+  right: 64px;
   display: flex;
   gap: 10px;
   z-index: 25;
@@ -566,6 +596,41 @@ body.roll-blur canvas {
 
 body.is-touch #debug-toggles {
   display: none;
+}
+
+#fullscreen-button-wrapper {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 24;
+}
+
+.fullscreen-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(11, 216, 255, 0.35);
+  background: rgba(5, 12, 24, 0.82);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35), inset 0 0 8px rgba(11, 216, 255, 0.2);
+  filter: drop-shadow(0 0 6px rgba(11, 216, 255, 0.4));
+  cursor: pointer;
+  --icon-url: url('/assets/fullscreen-svgrepo-com.svg');
+}
+
+.fullscreen-btn::before {
+  inset: 22%;
+}
+
+.fullscreen-btn.active {
+  border-color: rgba(11, 216, 255, 0.7);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(11, 216, 255, 0.36);
+}
+
+@media (max-width: 640px) {
+  #fullscreen-button-wrapper {
+    top: 10px;
+    right: 10px;
+  }
 }
 body.is-touch #hud {
   width: calc(100vw - 24px);
