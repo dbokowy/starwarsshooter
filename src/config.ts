@@ -30,8 +30,8 @@ export const PLAYER_CONFIG: PlayerConfig = {
   ],
   flameOffsets: [
     new THREE.Vector3(-0.6, 2.1, 4.8),
-    new THREE.Vector3(-0.6, -0.2, 4.8),
-    new THREE.Vector3(2.4, 2.1, 4.8),
+    new THREE.Vector3(-0.7, -0.2, 4.8),
+    new THREE.Vector3(2.3, 2.1, 4.8),
     new THREE.Vector3(2.4, -0.2, 4.8)
   ]
 };

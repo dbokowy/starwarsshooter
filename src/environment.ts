@@ -219,7 +219,7 @@ function getCoreTexture(): THREE.Texture {
 export function createSpaceDust(
   scene: THREE.Scene,
   count: number = 120,
-  radius: number = 700,
+  radius: number = 1400,
   size: number = 0.7
 ): SpaceDust {
   const positions = new Float32Array(count * 3);
