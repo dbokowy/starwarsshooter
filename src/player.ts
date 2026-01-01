@@ -63,6 +63,11 @@ export class PlayerController {
     this.hitSoundBuffer = buffer;
   }
 
+  fullyHeal(): void {
+    this.health = this.config.maxHealth;
+    this.hitFlashTimer = 0;
+  }
+
   async loadModel(path: string, rotation: THREE.Euler, scale: number, positionOffset: THREE.Vector3 = new THREE.Vector3(0, 0, 0)): Promise<void> {
     const model = await this.load(path);
     this.model = model;
@@ -371,8 +376,8 @@ export class PlayerController {
 
   private updateSpeed(delta: number, input: InputState): void {
     const now = performance.now();
-    const maxBoost = this.config.boostMultiplier;
-    const regularBoost = 1 + (maxBoost - 1) * 0.8; // bottom 80% of boost is unlimited
+    const maxBoost = this.config.boostMultiplier; // 4x at full boost
+    const regularBoost = 2; // baseline boost gives ~2x speed
 
     let boostFactor = 1;
     if (input.boost) {
@@ -413,14 +418,18 @@ export class PlayerController {
 
     this.root.position.addScaledVector(move, delta);
 
-    const yawChange = ((input.left ? 1 : 0) - (input.right ? 1 : 0)) * delta * 1.3;
+    const yawChange = ((input.left ? 1 : 0) - (input.right ? 1 : 0)) * delta * 0.9; // slower yaw for smoother turns
     const pitchChange = ((input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0)) * delta * 1.3;
 
     this.root.rotation.y += yawChange;
     const maxPitch = Math.PI / 3 + THREE.MathUtils.degToRad(15); // allow an extra 15° up/down
     this.root.rotation.x = THREE.MathUtils.clamp(this.root.rotation.x + pitchChange, -maxPitch, maxPitch);
 
-    const targetRoll = THREE.MathUtils.clamp(((input.left ? 1 : 0) - (input.right ? 1 : 0)) * 0.4, -0.6, 0.6);
+    const targetRoll = THREE.MathUtils.clamp(
+      ((input.left ? 1 : 0) - (input.right ? 1 : 0)) * 1,
+      -Math.PI / 3,
+      Math.PI / 3
+    ); // allow up to ~60 deg bank
 
     if (this.rolling) {
       this.rollTime += delta;
@@ -434,7 +443,7 @@ export class PlayerController {
         document.body.classList.remove('roll-blur');
       }
     } else {
-      this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, targetRoll, 0.12);
+      this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, targetRoll, 0.08); // slower roll easing for smoother banking
     }
   }
 
@@ -444,10 +453,6 @@ export class PlayerController {
     this.root.position.y = Math.max(this.playArea.minY, Math.min(this.playArea.maxY, this.root.position.y));
   }
 }
-
-
-
-
 
 
 

@@ -393,7 +393,7 @@ export class EnemySquadron {
     enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - delta * 2.5);
     const t = 1 - enemy.hitFlashTimer / 0.4;
     const opacity = THREE.MathUtils.lerp(0.85, 0, t);
-    const scale = THREE.MathUtils.lerp(6.5, 8.5, t);
+    const scale = THREE.MathUtils.lerp(9.75, 12.75, t);
     const material = enemy.hitFlash.material as THREE.SpriteMaterial;
     material.opacity = opacity;
     enemy.hitFlash.scale.set(scale, scale, 1);
@@ -435,7 +435,7 @@ export class EnemySquadron {
       fog: false
     });
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(6.5, 6.5, 1);
+    sprite.scale.set(9.75, 9.75, 1);
     sprite.renderOrder = 40;
     return sprite;
   }

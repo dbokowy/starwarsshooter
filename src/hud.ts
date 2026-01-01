@@ -4,6 +4,8 @@ import * as THREE from 'three';
 export class Hud {
   private readonly healthBar: HTMLElement | null;
   private readonly speedBar: HTMLElement | null;
+  private lowHealthBlink = false;
+  private lastBlink = 0;
 
   constructor(elements: HudElements) {
     this.healthBar = elements.healthBar;
@@ -14,6 +16,14 @@ export class Hud {
     if (!this.healthBar) return;
     const pct = Math.max(0, current) / max;
     this.healthBar.style.width = `${pct * 100}%`;
+
+    const shouldBlink = pct < 0.3;
+    if (shouldBlink) {
+      // keep class applied; CSS handles animation
+      this.healthBar.classList.add('blink');
+    } else {
+      this.healthBar.classList.remove('blink');
+    }
   }
 
   updateSpeed(currentSpeed: number, baseSpeed: number, boostMultiplier: number): void {

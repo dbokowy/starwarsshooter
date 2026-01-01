@@ -63,6 +63,7 @@ let immortal = false;
 let gameStarted = false;
 let winPending = false;
 let winTimer: number | null = null;
+let wave = 1;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
@@ -87,7 +88,7 @@ async function init() {
     0.9337123125,
     new THREE.Vector3(0, -2, 0)
   );
-  await enemies.init(2, player, destroyer ? destroyer.position : undefined);
+  await enemies.init(1, player, destroyer ? destroyer.position : undefined);
   hideLoading();
   prevPlayerPos.copy(player.root.position);
 
@@ -312,7 +313,7 @@ function buildObstacles(): Obstacle[] {
 
 function onEnemyDestroyed(): void {
   if (enemies.getCount() === 0 && !winPending && !player.isDestroyed()) {
-    handleVictory();
+    advanceWave();
   }
 }
 
@@ -323,6 +324,7 @@ function startGame(): void {
   if (resultModal) resultModal.classList.add('hidden');
   clearWinTimer();
   winPending = false;
+  wave = 1;
 }
 
 function showResult(text: string, isLoss: boolean): void {
@@ -395,6 +397,31 @@ function handleVictory(): void {
   showResult('Zwyciestwo', false);
 }
 
+function scheduleNextWave(count: number): void {
+  clearWinTimer();
+  winTimer = window.setTimeout(async () => {
+    player.fullyHeal();
+    await enemies.reset(count, player, destroyer ? destroyer.position : undefined);
+    enemies.setActive(true);
+    enemies.setFireEnabled(true);
+  }, 10000);
+}
+
+async function advanceWave(): Promise<void> {
+  if (wave === 1) {
+    wave = 2;
+    scheduleNextWave(2);
+  } else if (wave === 2) {
+    wave = 3;
+    scheduleNextWave(3);
+  } else if (wave === 3) {
+    wave = 4;
+    scheduleNextWave(4);
+  } else {
+    handleVictory();
+  }
+}
+
 function setupFullscreenToggle(): void {
   if (!fullscreenBtn) return;
   const updateState = () => {
@@ -417,6 +444,7 @@ async function restartGame(): Promise<void> {
   gameStarted = false;
   if (resultModal) resultModal.classList.add('hidden');
   player.reset();
-  await enemies.reset(2, player, destroyer ? destroyer.position : undefined);
+  wave = 1;
+  await enemies.reset(1, player, destroyer ? destroyer.position : undefined);
   startGame();
 }
