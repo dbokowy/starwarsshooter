@@ -459,7 +459,7 @@ export class EnemySquadron {
       fog: false
     });
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(9.75, 9.75, 1);
+    sprite.scale.set(19.5, 19.5, 1); // 2x larger shield flash
     sprite.renderOrder = 40;
     return sprite;
   }

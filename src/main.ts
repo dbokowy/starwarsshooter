@@ -63,7 +63,7 @@ const toggleDevUi = (visible: boolean) => {
   if (enemyFireBtn) enemyFireBtn.style.display = visible ? 'inline-flex' : 'none';
   if (enemyExplosionBtn) enemyExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
   if (asteroidHighlightBtn) asteroidHighlightBtn.style.display = visible ? 'inline-flex' : 'none';
-  if (fullscreenBtn) fullscreenBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (fullscreenBtn) fullscreenBtn.style.display = 'inline-flex'; // always visible
 };
 const devToggleHandler = (event: KeyboardEvent) => {
   if (event.code === 'KeyT') {
