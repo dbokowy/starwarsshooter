@@ -48,6 +48,7 @@ export class PlayerController {
   private readonly trailsEnabled = true;
   private trailsVisible = true;
   private turnLean = 0;
+  private verticalLean = 0;
   private readonly trailJitterFreq = 3.2;
   private readonly trailJitterAmp = 0.08;
   private readonly trailVisibilityThreshold = 0.5; // fraction of top speed
@@ -126,7 +127,8 @@ export class PlayerController {
       this.config.boostMultiplier,
       time,
       this.getRollBend(),
-      this.turnLean
+      this.turnLean,
+      this.verticalLean
     );
     this.updateWingTrails();
   }
@@ -219,6 +221,7 @@ export class PlayerController {
     this.health = this.config.maxHealth;
     this.currentSpeed = this.config.baseSpeed;
     this.turnLean = 0;
+    this.verticalLean = 0;
     this.root.position.copy(this.startPosition);
     this.root.rotation.set(0, 0, 0);
     this.setShipVisible(true);
@@ -476,6 +479,11 @@ export class PlayerController {
 
     const yawIntent = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const pitchIntent = (input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0);
+    const verticalIntent = THREE.MathUtils.clamp(
+      (input.up ? 1 : 0) - (input.down ? 1 : 0) + pitchIntent * 0.35, // restore modest pitch influence
+      -1,
+      1
+    );
 
     const yawTarget = this.root.rotation.y + yawIntent * -delta * 0.9;
     const pitchTargetUnclamped = this.root.rotation.x + pitchIntent * delta * 1.3;
@@ -513,6 +521,9 @@ export class PlayerController {
     const desiredLean = THREE.MathUtils.clamp(yawIntent * 0.8 + rollLean * 0.7, -1, 1);
     const leanSmooth = 1 - Math.exp(-4 * delta);
     this.turnLean = THREE.MathUtils.lerp(this.turnLean, desiredLean, leanSmooth);
+
+    const verticalSmooth = 1 - Math.exp(-5 * delta);
+    this.verticalLean = THREE.MathUtils.lerp(this.verticalLean, verticalIntent, verticalSmooth);
   }
 
   private clampToPlayArea(): void {

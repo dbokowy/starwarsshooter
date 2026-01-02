@@ -68,7 +68,6 @@ const toggleDevUi = (visible: boolean) => {
   if (asteroidHighlightBtn) asteroidHighlightBtn.style.display = visible ? 'inline-flex' : 'none';
   if (asteroidExplosionBtn) asteroidExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
   if (musicToggleBtn) musicToggleBtn.style.display = visible ? 'inline-flex' : 'none';
-  if (fullscreenBtn) fullscreenBtn.style.display = visible ? 'inline-flex' : 'none';
   if (fpsEl) fpsEl.style.display = visible ? 'block' : 'none';
 };
 const devToggleHandler = (event: KeyboardEvent) => {

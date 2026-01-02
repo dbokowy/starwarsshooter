@@ -76,25 +76,30 @@ export class EngineFlames {
     boostMultiplier: number,
     time: number,
     rollBend: number = 0,
-    turnLean: number = 0
+    turnLean: number = 0,
+    verticalLean: number = 0
   ): void {
     if (!this.flames.length) return;
 
     const boostNorm = THREE.MathUtils.clamp((currentSpeed - baseSpeed) / (baseSpeed * (boostMultiplier - 1)), 0, 1);
     const flare = 0.25 + boostNorm * 0.95;
     const leanStrength = THREE.MathUtils.clamp(turnLean, -1, 1);
+    const vertStrength = THREE.MathUtils.clamp(verticalLean, -1, 1);
 
     this.flames.forEach((flame, idx) => {
       const offset = flame.userData.offset as THREE.Vector3;
       const sideSign = offset.x < 0 ? -1 : 1; // left negative, right positive
       const flicker = 1 + Math.sin(time * 1.8 + idx * 0.7) * 0.06 + Math.random() * 0.04;
       const leanScale = 1 + -sideSign * leanStrength * 0.3; // right turn -> left engines longer, right shorter
-      const lengthScale = THREE.MathUtils.lerp(1.1, 6.8, flare) * flicker * leanScale;
+      const verticalInfluence = (offset.y >= 0 ? -1 : 1) * vertStrength;
+      const verticalScale = THREE.MathUtils.clamp(1 + verticalInfluence * 1.05, 0.55, 1.9); // stronger bias so effect is visible
+      const lengthScale = THREE.MathUtils.lerp(1.1, 6.8, flare) * flicker * leanScale * verticalScale;
+      const radiusScaleBias = THREE.MathUtils.clamp(1 + verticalInfluence * 0.55, 0.7, 1.5);
       const radiusScale = THREE.MathUtils.lerp(0.65, 1.6, flare) * flicker; // keep current max diameter
       flame.scale.set(
-        flame.userData.baseRadius * radiusScale,
+        flame.userData.baseRadius * radiusScale * radiusScaleBias,
         flame.userData.baseLength * lengthScale,
-        flame.userData.baseRadius * radiusScale
+        flame.userData.baseRadius * radiusScale * radiusScaleBias
       );
 
       // keep origin at nozzle; with base-translated geometry, scaling now extends only backward
