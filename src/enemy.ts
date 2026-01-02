@@ -165,7 +165,7 @@ export class EnemySquadron {
       const enemy = this.enemies[i];
       this.updateMovement(enemy, delta, playerPos, obstacles);
       this.updateOrientation(enemy, playerPos);
-      this.updateHealthBar(enemy, camera);
+      this.updateHealthBar(enemy, camera, playerPos);
       this.updateHitFlash(enemy, delta, camera);
       this.tryShoot(enemy, playerPos, now);
     }
@@ -396,9 +396,9 @@ export class EnemySquadron {
     this.scene.remove(enemy.root);
   }
 
-  private updateHealthBar(enemy: EnemyShip, camera: THREE.Camera): void {
+  private updateHealthBar(enemy: EnemyShip, camera: THREE.Camera, target: THREE.Vector3): void {
     enemy.healthBar.group.position.setY(enemy.boundingRadius * 0.8 + 2.2);
-    enemy.healthBar.group.quaternion.copy(camera.quaternion);
+    enemy.healthBar.group.lookAt(target);
     this.updateHealthFill(enemy);
   }
 
