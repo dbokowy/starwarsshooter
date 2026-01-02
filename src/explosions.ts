@@ -15,8 +15,11 @@ type ExplosionInstance = {
 };
 
 export class ExplosionManager {
-  private base: THREE.Object3D | null = null;
-  private animations: THREE.AnimationClip[] = [];
+  private sparkBase: THREE.Object3D | null = null;
+  private sparkAnimations: THREE.AnimationClip[] = [];
+  private sphereBase: THREE.Object3D | null = null;
+  private sphereAnimations: THREE.AnimationClip[] = [];
+  private sphereCenterOffset: THREE.Vector3 | null = null;
   private readonly active: ExplosionInstance[] = [];
   private soundBuffer: AudioBuffer | null = null;
   private readonly anisotropy: number;
@@ -32,13 +35,24 @@ export class ExplosionManager {
   }
 
   async init(): Promise<void> {
-    const gltf = await this.load(`${this.assetsPath}/sparksexplosion/scene.gltf`);
-    this.base = gltf.scene;
-    this.animations = gltf.animations ?? [];
+    const spark = await this.load(`${this.assetsPath}/sparksexplosion/scene.gltf`);
+    this.sparkBase = spark.scene;
+    this.sparkAnimations = spark.animations ?? [];
+
+    const sphere = await this.load(`${this.assetsPath}/sphere_explosion/scene.gltf`);
+    this.sphereBase = sphere.scene;
+    this.sphereAnimations = sphere.animations ?? [];
+    const sphereBox = new THREE.Box3().setFromObject(this.sphereBase);
+    const sphereCenter = new THREE.Vector3();
+    sphereBox.getCenter(sphereCenter);
+    this.sphereCenterOffset = sphereCenter.clone();
   }
 
-  trigger(position: THREE.Vector3, scale: number = 16, forward?: THREE.Vector3): void {
-    if (!this.base) return;
+  trigger(position: THREE.Vector3, scale: number = 16, forward?: THREE.Vector3, opts?: { useSphere?: boolean }): void {
+    const useSphere = opts?.useSphere === true;
+    const base = useSphere ? this.sphereBase : this.sparkBase;
+    const animations = useSphere ? this.sphereAnimations : this.sparkAnimations;
+    if (!base) return;
 
     const container = new THREE.Group();
     const pos = position.clone();
@@ -49,9 +63,13 @@ export class ExplosionManager {
     }
     container.position.copy(pos);
 
-    const explosion = clone(this.base);
-    const startScale = scale * 0.07;
-    const finalScale = scale * 2.0; // slightly smaller overall
+    const explosion = clone(base);
+    if (useSphere && this.sphereCenterOffset) {
+      explosion.position.copy(this.sphereCenterOffset).multiplyScalar(-1); // recenter model so it spawns exactly at target
+    }
+    const isSphere = useSphere;
+    const startScale = isSphere ? scale * 0.0007 : scale * 0.07;
+    const finalScale = isSphere ? scale * 0.02 : scale * 2.0;
     container.scale.setScalar(startScale);
 
     const materials: { mat: THREE.Material & { opacity?: number }; baseOpacity: number }[] = [];
@@ -90,27 +108,33 @@ export class ExplosionManager {
     explosion.renderOrder = 30;
     container.add(explosion);
 
-    const shockMat = new THREE.SpriteMaterial({
-      map: getShockwaveTexture(),
-      color: 0xffbb88,
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending
-    });
-    const shockwave = new THREE.Sprite(shockMat);
-    shockwave.scale.setScalar(finalScale * 0.6);
-    shockwave.renderOrder = 31;
-    shockwave.frustumCulled = false;
-    container.add(shockwave);
+    const shockwave =
+      useSphere
+        ? undefined
+        : (() => {
+            const shockMat = new THREE.SpriteMaterial({
+              map: getShockwaveTexture(),
+              color: 0xffbb88,
+              transparent: true,
+              opacity: 0.9,
+              depthWrite: false,
+              depthTest: false,
+              blending: THREE.AdditiveBlending
+            });
+            const sprite = new THREE.Sprite(shockMat);
+            sprite.scale.setScalar(finalScale * 0.6);
+            sprite.renderOrder = 31;
+            sprite.frustumCulled = false;
+            container.add(sprite);
+            return sprite;
+          })();
 
-    const particle = this.createParticles(scale * 0.18);
-    container.add(particle);
+    const particle = useSphere ? undefined : this.createParticles(scale * 0.18);
+    if (particle) container.add(particle);
 
-    const mixer = this.animations.length ? new THREE.AnimationMixer(explosion) : undefined;
+    const mixer = animations.length ? new THREE.AnimationMixer(explosion) : undefined;
     if (mixer) {
-      this.animations.forEach(clip => {
+      animations.forEach(clip => {
         const action = mixer.clipAction(clip.clone(), explosion);
         action.reset();
         action.setLoop(THREE.LoopOnce, 1);

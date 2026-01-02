@@ -434,7 +434,7 @@ export class EnemySquadron {
     const fillGeom = new THREE.PlaneGeometry(this.healthBarWidth, 0.68); // double thickness, longer fill
 
     const bgMat = new THREE.MeshBasicMaterial({ color: 0x0a1b2c, transparent: true, opacity: 0.75, depthWrite: false });
-    const fillMat = new THREE.MeshBasicMaterial({ color: 0x5ecbff, transparent: true, opacity: 0.95, depthWrite: false });
+    const fillMat = new THREE.MeshBasicMaterial({ color: 0xff4a4a, transparent: true, opacity: 0.95, depthWrite: false });
 
     const bg = new THREE.Mesh(bgGeom, bgMat);
     const fill = new THREE.Mesh(fillGeom, fillMat);

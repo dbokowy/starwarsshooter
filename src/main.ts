@@ -42,6 +42,8 @@ type AsteroidPrefab = { scene: THREE.Object3D; radius: number };
 const asteroidPrefabs: AsteroidPrefab[] = [];
 let highlightAsteroids = false;
 const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
+const frustum = new THREE.Frustum();
+const projScreenMatrix = new THREE.Matrix4();
 const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, renderer.capabilities.getMaxAnisotropy());
 const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
 const prevPlayerPos = new THREE.Vector3();
@@ -56,6 +58,7 @@ const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElement | null;
 const controlsModal = document.getElementById('controls-modal') as HTMLElement | null;
 const controlsCloseBtn = document.getElementById('controls-close') as HTMLButtonElement | null;
+const fpsEl = document.getElementById('dev-fps') as HTMLElement | null;
 let devUiVisible = false;
 const toggleDevUi = (visible: boolean) => {
   devUiVisible = visible;
@@ -63,7 +66,9 @@ const toggleDevUi = (visible: boolean) => {
   if (enemyFireBtn) enemyFireBtn.style.display = visible ? 'inline-flex' : 'none';
   if (enemyExplosionBtn) enemyExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
   if (asteroidHighlightBtn) asteroidHighlightBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (asteroidExplosionBtn) asteroidExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
   if (fullscreenBtn) fullscreenBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (fpsEl) fpsEl.style.display = visible ? 'block' : 'none';
 };
 const devToggleHandler = (event: KeyboardEvent) => {
   if (event.code === 'KeyT') {
@@ -74,6 +79,7 @@ const immortalityBtn = document.getElementById('toggle-immortal') as HTMLButtonE
 const enemyFireBtn = document.getElementById('toggle-enemy-fire') as HTMLButtonElement | null;
 const enemyExplosionBtn = document.getElementById('trigger-enemy-explosion') as HTMLButtonElement | null;
 const asteroidHighlightBtn = document.getElementById('toggle-asteroid-highlight') as HTMLButtonElement | null;
+const asteroidExplosionBtn = document.getElementById('trigger-asteroid-explosion') as HTMLButtonElement | null;
 const resultModal = document.getElementById('result-modal') as HTMLElement | null;
 const resultMessage = document.getElementById('result-message') as HTMLElement | null;
 const resultRetryBtn = document.getElementById('result-retry') as HTMLButtonElement | null;
@@ -147,6 +153,9 @@ function update() {
   const delta = clock.getDelta();
   const elapsed = clock.getElapsedTime();
   const now = performance.now();
+  if (fpsEl && devUiVisible && delta > 0) {
+    fpsEl.textContent = `${(1 / delta).toFixed(0)} fps`;
+  }
 
   player.update(delta, inputController.state);
   player.updateBullets(delta);
@@ -445,6 +454,16 @@ function bindToggles(): void {
     asteroidHighlightBtn.textContent = 'Podswietl asteroidy: OFF';
   }
 
+  if (asteroidExplosionBtn) {
+    asteroidExplosionBtn.addEventListener('click', () => {
+      const idx = getNearestAsteroidInView(camera);
+      if (idx === -1) return;
+      const ast = asteroids[idx];
+      explosions.trigger(ast.mesh.position, ast.radius * 1.4, undefined, { useSphere: true });
+      removeAsteroid(idx);
+    });
+  }
+
   if (resultRetryBtn) {
     resultRetryBtn.addEventListener('click', () => {
       restartGame();
@@ -493,6 +512,24 @@ async function advanceWave(): Promise<void> {
   } else {
     handleVictory();
   }
+}
+
+function getNearestAsteroidInView(cam: THREE.Camera): number {
+  projScreenMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+  frustum.setFromProjectionMatrix(projScreenMatrix);
+
+  let bestIdx = -1;
+  let bestDist = Infinity;
+  for (let i = 0; i < asteroids.length; i += 1) {
+    const pos = asteroids[i].mesh.position;
+    if (!frustum.containsPoint(pos)) continue;
+    const dist = cam.position.distanceToSquared(pos);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
 }
 
 async function loadAsteroidPrefabs(): Promise<void> {
@@ -589,7 +626,7 @@ function handleAsteroidBulletHits(): void {
       if (bullet.mesh.position.distanceTo(ast.mesh.position) <= hitRadius) {
         scene.remove(bullet.mesh);
         player.bullets.splice(j, 1);
-      explosions.trigger(ast.mesh.position, ast.radius * 1.4);
+        explosions.trigger(ast.mesh.position, ast.radius * 1.4, undefined, { useSphere: true });
         removeAsteroid(i);
         break;
       }
@@ -616,7 +653,7 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
     for (const root of enemyRoots) {
       if (pos.distanceTo(root.position) <= ast.radius + 8) {
         if (enemies.destroyEnemyByRoot(root)) {
-          explosions.trigger(pos, player.collisionRadius * 1.6);
+          explosions.trigger(pos, player.collisionRadius * 1.6, undefined, { useSphere: true });
           onEnemyDestroyedCb();
           removeAsteroid(i);
           collided = true;

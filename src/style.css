@@ -770,3 +770,15 @@ body.is-touch #hud .bar-fill.speed {
     bottom: 140px;
   }
 }
+
+#dev-fps {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 12;
+  color: #00eaff;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  display: none;
+}
