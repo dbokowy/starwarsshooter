@@ -40,7 +40,7 @@ export class PlayerController {
   private readonly hitFlashDuration = 0.35;
   private hitSoundBuffer: AudioBuffer | null = null;
   private wingTrails: THREE.Mesh[] = [];
-  private readonly trailsEnabled = false;
+  private readonly trailsEnabled = true;
 
   constructor(
     private readonly loader: GLTFLoader,
@@ -320,7 +320,7 @@ export class PlayerController {
 
   private addWingTrails(): void {
     if (!this.trailsEnabled) return;
-    const trailGeometry = new THREE.CylinderGeometry(0.12, 0.06, 4.2, 8, 1, true);
+    const trailGeometry = new THREE.CylinderGeometry(0.0087, 0.0043, 4.2, 8, 1, true); // slim trails as before
     const trailMaterial = new THREE.MeshBasicMaterial({
       color: 0x63d8ff,
       transparent: true,
@@ -331,8 +331,10 @@ export class PlayerController {
     });
 
     const offsets = [
-      new THREE.Vector3(2.6, -0.25, 4.8),
-      new THREE.Vector3(-2.6, 1, 4.8)
+      new THREE.Vector3(7.4, -0.25, 4.8), // right lower
+      new THREE.Vector3(-5.3, 2.7, 4.8), // left upper
+      new THREE.Vector3(7.4, 2, 4.8), // right upper
+      new THREE.Vector3(-5.6, -0.45, 4.8) // left lower
     ];
 
     offsets.forEach(offset => {
@@ -349,16 +351,17 @@ export class PlayerController {
     if (!this.trailsEnabled) return;
     if (!this.wingTrails.length) return;
     const speedRatio = THREE.MathUtils.clamp(
-      (this.currentSpeed - this.config.baseSpeed * 0.8) / (this.config.baseSpeed * this.config.boostMultiplier - this.config.baseSpeed * 0.8),
+      (this.currentSpeed - this.config.baseSpeed * 0.5) / (this.config.baseSpeed * this.config.boostMultiplier - this.config.baseSpeed * 0.5),
       0,
       1
     );
-    const opacity = THREE.MathUtils.lerp(0, 0.6, speedRatio);
-    const lengthScale = THREE.MathUtils.lerp(0.6, 1.6, speedRatio);
+    const ramp = THREE.MathUtils.clamp((speedRatio - 0.5) / 0.5, 0, 1); // start showing >50% speed
+    const opacity = THREE.MathUtils.lerp(0, 0.6, ramp);
+    const lengthScale = THREE.MathUtils.lerp(0.6, 1.6, ramp);
 
     this.wingTrails.forEach(trail => {
       const mat = trail.material as THREE.MeshBasicMaterial;
-      mat.opacity = speedRatio >= 0.8 ? opacity : 0;
+      mat.opacity = opacity;
       trail.scale.setScalar(1);
       trail.scale.z = lengthScale;
       trail.visible = mat.opacity > 0.02;
