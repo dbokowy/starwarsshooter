@@ -106,6 +106,7 @@ loadingManager.onLoad = () => {
 
 async function init() {
   document.body.classList.toggle('is-touch', IS_MOBILE);
+  toggleDevUi(false); // hide dev controls by default
   const sunPos = new THREE.Vector3(-13000, 1600, -9000); // further left, closer in front of planet
   planet = await loadEnvironment(loader, scene, ASSETS_PATH);
   sun = (await createSun(scene, sunPos, 784, loader, ASSETS_PATH, planet)) as THREE.Mesh; // reduced sun size by ~30%
@@ -114,7 +115,10 @@ async function init() {
     destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
   }
   await spawnAsteroids(200);
-  audioLoader.load(`${ASSETS_PATH}/tie-fighter-fire-1.mp3`, buffer => player.setFireSound(buffer));
+  audioLoader.load(`${ASSETS_PATH}/tie-fighter-fire-1.mp3`, buffer => {
+    player.setFireSound(buffer);
+    enemies.setAudio(listener, buffer);
+  });
   audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => player.setHitSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/explosion-fx-2.mp3`, buffer => explosions.setSoundBuffer(buffer));
   await explosions.init();

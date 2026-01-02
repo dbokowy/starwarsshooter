@@ -56,6 +56,8 @@ export class EnemySquadron {
   private readonly aimSpread = 0.18; // tighter for hits; explicit miss logic decides off-target shots
   private readonly approachDuration = 10; // seconds to fly in from destroyer
   private active = false;
+  private enemyFireSound?: AudioBuffer;
+  private listener?: THREE.AudioListener;
 
   constructor(
     private readonly loader: GLTFLoader,
@@ -63,6 +65,11 @@ export class EnemySquadron {
     private readonly assetsPath: string,
     private readonly explosions: ExplosionManager
   ) {}
+
+  setAudio(listener: THREE.AudioListener, fireSound: AudioBuffer): void {
+    this.listener = listener;
+    this.enemyFireSound = fireSound;
+  }
 
   async init(count: number, player: PlayerController, formationOrigin?: THREE.Vector3): Promise<void> {
     this.prefab = await this.loadPrefab();
@@ -318,12 +325,21 @@ export class EnemySquadron {
 
       const aimDir = targetPos.sub(laser.position).normalize();
       laser.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), aimDir); // align beam to travel direction
-    const velocity = aimDir.multiplyScalar(this.bulletSpeed);
+      const velocity = aimDir.multiplyScalar(this.bulletSpeed);
 
-    this.bullets.push({ mesh: laser, velocity, life: this.bulletLife });
-    this.scene.add(laser);
-  });
-}
+      this.bullets.push({ mesh: laser, velocity, life: this.bulletLife });
+      this.scene.add(laser);
+
+      if (this.enemyFireSound && this.listener) {
+        const snd = new THREE.Audio(this.listener);
+        snd.setBuffer(this.enemyFireSound);
+        const distance = enemy.root.position.distanceTo(targetPos);
+        const volume = THREE.MathUtils.clamp(0.7 - distance / 500, 0.08, 0.7);
+        snd.setVolume(volume);
+        snd.play();
+      }
+    });
+  }
 
   private updateBullets(delta: number): void {
     for (let i = this.bullets.length - 1; i >= 0; i -= 1) {
