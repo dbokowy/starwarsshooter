@@ -461,7 +461,7 @@ function bindToggles(): void {
       const idx = getNearestAsteroidInView(camera);
       if (idx === -1) return;
       const ast = asteroids[idx];
-      explosions.trigger(ast.mesh.position, ast.radius * 1.4, undefined, { useSphere: true });
+      explosions.trigger(ast.mesh.position, ast.radius * 1.4);
       removeAsteroid(idx);
     });
   }
@@ -644,7 +644,7 @@ function handleAsteroidBulletHits(): void {
       if (bullet.mesh.position.distanceTo(ast.mesh.position) <= hitRadius) {
         scene.remove(bullet.mesh);
         player.bullets.splice(j, 1);
-        explosions.trigger(ast.mesh.position, ast.radius * 1.4, undefined, { useSphere: true });
+        explosions.trigger(ast.mesh.position, ast.radius * 1.4);
         removeAsteroid(i);
         break;
       }
@@ -671,7 +671,7 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
     for (const root of enemyRoots) {
       if (pos.distanceTo(root.position) <= ast.radius + 8) {
         if (enemies.destroyEnemyByRoot(root)) {
-          explosions.trigger(pos, player.collisionRadius * 1.6, undefined, { useSphere: true });
+          explosions.trigger(pos, player.collisionRadius * 1.6);
           onEnemyDestroyedCb();
           removeAsteroid(i);
           collided = true;

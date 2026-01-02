@@ -7,7 +7,6 @@ type ExplosionInstance = {
   mixer?: THREE.AnimationMixer;
   shockwave?: THREE.Sprite;
   particle?: THREE.Points;
-  isSphere: boolean;
   timeLeft: number;
   totalTime: number;
   startScale: number;
@@ -18,9 +17,6 @@ type ExplosionInstance = {
 export class ExplosionManager {
   private sparkBase: THREE.Object3D | null = null;
   private sparkAnimations: THREE.AnimationClip[] = [];
-  private sphereBase: THREE.Object3D | null = null;
-  private sphereAnimations: THREE.AnimationClip[] = [];
-  private sphereCenterOffset: THREE.Vector3 | null = null;
   private readonly active: ExplosionInstance[] = [];
   private soundBuffer: AudioBuffer | null = null;
   private readonly anisotropy: number;
@@ -39,20 +35,11 @@ export class ExplosionManager {
     const spark = await this.load(`${this.assetsPath}/sparksexplosion/scene.gltf`);
     this.sparkBase = spark.scene;
     this.sparkAnimations = spark.animations ?? [];
-
-    const sphere = await this.load(`${this.assetsPath}/sphere_explosion/scene.gltf`);
-    this.sphereBase = sphere.scene;
-    this.sphereAnimations = sphere.animations ?? [];
-    const sphereBox = new THREE.Box3().setFromObject(this.sphereBase);
-    const sphereCenter = new THREE.Vector3();
-    sphereBox.getCenter(sphereCenter);
-    this.sphereCenterOffset = sphereCenter.clone();
   }
 
-  trigger(position: THREE.Vector3, scale: number = 16, forward?: THREE.Vector3, opts?: { useSphere?: boolean }): void {
-    const useSphere = opts?.useSphere === true;
-    const base = useSphere ? this.sphereBase : this.sparkBase;
-    const animations = useSphere ? this.sphereAnimations : this.sparkAnimations;
+  trigger(position: THREE.Vector3, scale: number = 16, forward?: THREE.Vector3): void {
+    const base = this.sparkBase;
+    const animations = this.sparkAnimations;
     if (!base) return;
 
     const container = new THREE.Group();
@@ -65,12 +52,8 @@ export class ExplosionManager {
     container.position.copy(pos);
 
     const explosion = clone(base);
-    if (useSphere && this.sphereCenterOffset) {
-      explosion.position.copy(this.sphereCenterOffset).multiplyScalar(-1); // recenter model so it spawns exactly at target
-    }
-    const isSphere = useSphere;
-    const startScale = isSphere ? scale * 0.0007 : scale * 0.07;
-    const finalScale = isSphere ? scale * 0.02 : scale * 2.0;
+    const startScale = scale * 0.07;
+    const finalScale = scale * 2.0;
     container.scale.setScalar(startScale);
 
     const materials: { mat: THREE.Material & { opacity?: number }; baseOpacity: number }[] = [];
@@ -78,24 +61,12 @@ export class ExplosionManager {
       obj.frustumCulled = false;
       const material = (obj as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
       const ensure = (mat: THREE.Material) => {
-        if (useSphere) {
-          if ('transparent' in mat) mat.transparent = true;
-          if ('depthWrite' in mat) mat.depthWrite = false;
-          if ('fog' in mat) (mat as THREE.Material & { fog?: boolean }).fog = false;
-          if ('blending' in mat) mat.blending = THREE.AdditiveBlending;
-          if ('color' in mat) (mat as THREE.MeshBasicMaterial).color?.set(0xffb078);
-          if ('emissive' in mat) {
-            (mat as THREE.MeshStandardMaterial).emissive?.set(0xcc5500);
-            (mat as THREE.MeshStandardMaterial).emissiveIntensity = 0.8;
-          }
-        } else {
-          if ('transparent' in mat) mat.transparent = true;
-          if ('depthWrite' in mat) mat.depthWrite = false;
-          if ('fog' in mat) (mat as THREE.Material & { fog?: boolean }).fog = false;
-          if ('blending' in mat) mat.blending = THREE.AdditiveBlending;
-          if ('color' in mat) (mat as THREE.MeshBasicMaterial).color?.set(0xff4422);
-          if ('emissive' in mat) (mat as THREE.MeshStandardMaterial).emissive?.set(0xcc2200);
-        }
+        if ('transparent' in mat) mat.transparent = true;
+        if ('depthWrite' in mat) mat.depthWrite = false;
+        if ('fog' in mat) (mat as THREE.Material & { fog?: boolean }).fog = false;
+        if ('blending' in mat) mat.blending = THREE.AdditiveBlending;
+        if ('color' in mat) (mat as THREE.MeshBasicMaterial).color?.set(0xff4422);
+        if ('emissive' in mat) (mat as THREE.MeshStandardMaterial).emissive?.set(0xcc2200);
         const typed = mat as THREE.Material & { map?: THREE.Texture; emissiveMap?: THREE.Texture };
         const updateTex = (tex?: THREE.Texture) => {
           if (!tex) return;
@@ -121,27 +92,25 @@ export class ExplosionManager {
     container.add(explosion);
 
     const shockwave =
-      useSphere
-        ? undefined
-        : (() => {
-            const shockMat = new THREE.SpriteMaterial({
-              map: getShockwaveTexture(),
-              color: 0xffbb88,
-              transparent: true,
-              opacity: 0.9,
-              depthWrite: false,
-              depthTest: false,
-              blending: THREE.AdditiveBlending
-            });
-            const sprite = new THREE.Sprite(shockMat);
-            sprite.scale.setScalar(finalScale * 0.6);
-            sprite.renderOrder = 31;
-            sprite.frustumCulled = false;
-            container.add(sprite);
-            return sprite;
-          })();
+      (() => {
+        const shockMat = new THREE.SpriteMaterial({
+          map: getShockwaveTexture(),
+          color: 0xffbb88,
+          transparent: true,
+          opacity: 0.9,
+          depthWrite: false,
+          depthTest: false,
+          blending: THREE.AdditiveBlending
+        });
+        const sprite = new THREE.Sprite(shockMat);
+        sprite.scale.setScalar(finalScale * 0.6);
+        sprite.renderOrder = 31;
+        sprite.frustumCulled = false;
+        container.add(sprite);
+        return sprite;
+      })();
 
-    const particle = useSphere ? undefined : this.createParticles(scale * 0.18);
+    const particle = this.createParticles(scale * 0.18);
     if (particle) container.add(particle);
 
     const mixer = animations.length ? new THREE.AnimationMixer(explosion) : undefined;
@@ -160,7 +129,6 @@ export class ExplosionManager {
     this.active.push({
       container,
       mixer,
-      isSphere,
       timeLeft: 1.2,
       totalTime: 1.2,
       startScale,
