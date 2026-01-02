@@ -67,6 +67,7 @@ const toggleDevUi = (visible: boolean) => {
   if (enemyExplosionBtn) enemyExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
   if (asteroidHighlightBtn) asteroidHighlightBtn.style.display = visible ? 'inline-flex' : 'none';
   if (asteroidExplosionBtn) asteroidExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (musicToggleBtn) musicToggleBtn.style.display = visible ? 'inline-flex' : 'none';
   if (fullscreenBtn) fullscreenBtn.style.display = visible ? 'inline-flex' : 'none';
   if (fpsEl) fpsEl.style.display = visible ? 'block' : 'none';
 };
@@ -80,6 +81,7 @@ const enemyFireBtn = document.getElementById('toggle-enemy-fire') as HTMLButtonE
 const enemyExplosionBtn = document.getElementById('trigger-enemy-explosion') as HTMLButtonElement | null;
 const asteroidHighlightBtn = document.getElementById('toggle-asteroid-highlight') as HTMLButtonElement | null;
 const asteroidExplosionBtn = document.getElementById('trigger-asteroid-explosion') as HTMLButtonElement | null;
+const musicToggleBtn = document.getElementById('toggle-music') as HTMLButtonElement | null;
 const resultModal = document.getElementById('result-modal') as HTMLElement | null;
 const resultMessage = document.getElementById('result-message') as HTMLElement | null;
 const resultRetryBtn = document.getElementById('result-retry') as HTMLButtonElement | null;
@@ -468,6 +470,22 @@ function bindToggles(): void {
     resultRetryBtn.addEventListener('click', () => {
       restartGame();
     });
+  }
+
+  if (musicToggleBtn) {
+    musicToggleBtn.addEventListener('click', () => {
+      if (!bgMusicEl) return;
+      const enabled = !(bgMusicEl.muted ?? false);
+      bgMusicEl.muted = enabled;
+      musicToggleBtn.classList.toggle('active', !enabled);
+      musicToggleBtn.textContent = enabled ? 'Muzyka: OFF' : 'Muzyka: ON';
+      if (!enabled && musicReady && !bgMusicEl.paused) {
+        // ensure playback resumes if already loaded
+        bgMusicEl.play().catch(() => undefined);
+      }
+    });
+    musicToggleBtn.textContent = 'Muzyka: ON';
+    musicToggleBtn.classList.add('active');
   }
 }
 

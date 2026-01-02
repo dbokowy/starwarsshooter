@@ -77,12 +77,24 @@ export class ExplosionManager {
       obj.frustumCulled = false;
       const material = (obj as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
       const ensure = (mat: THREE.Material) => {
-        if ('transparent' in mat) mat.transparent = true;
-        if ('depthWrite' in mat) mat.depthWrite = false;
-        if ('fog' in mat) (mat as THREE.Material & { fog?: boolean }).fog = false;
-        if ('blending' in mat) mat.blending = THREE.AdditiveBlending;
-        if ('color' in mat) (mat as THREE.MeshBasicMaterial).color?.set(0xff4422);
-        if ('emissive' in mat) (mat as THREE.MeshStandardMaterial).emissive?.set(0xcc2200);
+        if (useSphere) {
+          if ('transparent' in mat) mat.transparent = true;
+          if ('depthWrite' in mat) mat.depthWrite = false;
+          if ('fog' in mat) (mat as THREE.Material & { fog?: boolean }).fog = false;
+          if ('blending' in mat) mat.blending = THREE.AdditiveBlending;
+          if ('color' in mat) (mat as THREE.MeshBasicMaterial).color?.set(0xffb078); // brightened warm tone
+          if ('emissive' in mat) {
+            (mat as THREE.MeshStandardMaterial).emissive?.set(0xcc5500);
+            (mat as THREE.MeshStandardMaterial).emissiveIntensity = 0.8;
+          }
+        } else {
+          if ('transparent' in mat) mat.transparent = true;
+          if ('depthWrite' in mat) mat.depthWrite = false;
+          if ('fog' in mat) (mat as THREE.Material & { fog?: boolean }).fog = false;
+          if ('blending' in mat) mat.blending = THREE.AdditiveBlending;
+          if ('color' in mat) (mat as THREE.MeshBasicMaterial).color?.set(0xff4422);
+          if ('emissive' in mat) (mat as THREE.MeshStandardMaterial).emissive?.set(0xcc2200);
+        }
         const typed = mat as THREE.Material & { map?: THREE.Texture; emissiveMap?: THREE.Texture };
         const updateTex = (tex?: THREE.Texture) => {
           if (!tex) return;
@@ -95,7 +107,6 @@ export class ExplosionManager {
         updateTex(typed.emissiveMap);
         const m = mat as THREE.Material & { opacity?: number };
         if (typeof m.opacity !== 'number' || Number.isNaN(m.opacity)) {
-          // ensure opacity field exists for fade
           (m as { opacity: number }).opacity = 1;
         }
         if (typeof m.opacity === 'number') m.opacity = 1;
