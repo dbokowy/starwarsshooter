@@ -56,9 +56,18 @@ const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElement | null;
 const controlsModal = document.getElementById('controls-modal') as HTMLElement | null;
 const controlsCloseBtn = document.getElementById('controls-close') as HTMLButtonElement | null;
-const testExplosionHandler = (event: KeyboardEvent) => {
+let devUiVisible = false;
+const toggleDevUi = (visible: boolean) => {
+  devUiVisible = visible;
+  if (immortalityBtn) immortalityBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (enemyFireBtn) enemyFireBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (enemyExplosionBtn) enemyExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (asteroidHighlightBtn) asteroidHighlightBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (fullscreenBtn) fullscreenBtn.style.display = visible ? 'inline-flex' : 'none';
+};
+const devToggleHandler = (event: KeyboardEvent) => {
   if (event.code === 'KeyT') {
-    handlePlayerDestroyed();
+    toggleDevUi(!devUiVisible);
   }
 };
 const immortalityBtn = document.getElementById('toggle-immortal') as HTMLButtonElement | null;
@@ -122,7 +131,7 @@ async function init() {
 
   smoothedLook.copy(player.root.position).add(CAMERA_RIG.lookOffset);
   window.addEventListener('resize', onResize);
-  window.addEventListener('keydown', testExplosionHandler);
+  window.addEventListener('keydown', devToggleHandler);
   bindToggles();
   setupFullscreenToggle();
   onResize();

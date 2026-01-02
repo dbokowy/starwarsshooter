@@ -318,12 +318,12 @@ export class EnemySquadron {
 
       const aimDir = targetPos.sub(laser.position).normalize();
       laser.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), aimDir); // align beam to travel direction
-      const velocity = aimDir.multiplyScalar(this.bulletSpeed);
+    const velocity = aimDir.multiplyScalar(this.bulletSpeed);
 
-      this.bullets.push({ mesh: laser, velocity, life: this.bulletLife });
-      this.scene.add(laser);
-    });
-  }
+    this.bullets.push({ mesh: laser, velocity, life: this.bulletLife });
+    this.scene.add(laser);
+  });
+}
 
   private updateBullets(delta: number): void {
     for (let i = this.bullets.length - 1; i >= 0; i -= 1) {

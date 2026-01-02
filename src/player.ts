@@ -20,6 +20,11 @@ export class PlayerController {
   readonly collisionRadius = 6.5;
   private baseModelPosition = new THREE.Vector3();
   private readonly startPosition = new THREE.Vector3(0, 0, 40);
+  private readonly tmpForward = new THREE.Vector3();
+  private readonly tmpRight = new THREE.Vector3();
+  private readonly tmpUp = new THREE.Vector3();
+  private readonly tmpMove = new THREE.Vector3();
+  private readonly tmpDir = new THREE.Vector3();
   private lastShot = 0;
   private readonly engineFlames: EngineFlames;
   private fireBuffer: AudioBuffer | null = null;
@@ -41,6 +46,12 @@ export class PlayerController {
   private hitSoundBuffer: AudioBuffer | null = null;
   private wingTrails: THREE.Mesh[] = [];
   private readonly trailsEnabled = true;
+  private readonly trailJitterFreq = 3.2;
+  private readonly trailJitterAmp = 0.08;
+  private readonly trailVisibilityThreshold = 0.5; // fraction of top speed
+  private readonly trailMinLength = 0.6;
+  private readonly trailMaxLength = 1.6;
+  private readonly trailMaxOpacity = 0.6;
 
   constructor(
     private readonly loader: GLTFLoader,
@@ -291,9 +302,9 @@ export class PlayerController {
     material.opacity = opacity;
     this.hitFlash.visible = opacity > 0;
 
-    const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
-    this.hitFlash.position.copy(dir.multiplyScalar(2.2));
-    this.hitFlash.lookAt(this.hitFlash.position.clone().add(dir));
+    this.tmpDir.set(0, 0, 1).applyQuaternion(this.root.quaternion);
+    this.hitFlash.position.copy(this.tmpDir).multiplyScalar(2.2);
+    this.hitFlash.lookAt(this.hitFlash.position.clone().add(this.tmpDir));
   }
 
   private getHitFlashTexture(): THREE.Texture {
@@ -355,15 +366,17 @@ export class PlayerController {
       0,
       1
     );
-    const ramp = THREE.MathUtils.clamp((speedRatio - 0.5) / 0.5, 0, 1); // start showing >50% speed
-    const opacity = THREE.MathUtils.lerp(0, 0.6, ramp);
-    const lengthScale = THREE.MathUtils.lerp(0.6, 1.6, ramp);
+    const ramp = THREE.MathUtils.clamp((speedRatio - this.trailVisibilityThreshold) / (1 - this.trailVisibilityThreshold), 0, 1); // start showing >50% speed
+    const opacity = THREE.MathUtils.lerp(0, this.trailMaxOpacity, ramp);
+    const baseLength = THREE.MathUtils.lerp(this.trailMinLength, this.trailMaxLength, ramp);
+    const t = performance.now() * 0.001;
 
-    this.wingTrails.forEach(trail => {
+    this.wingTrails.forEach((trail, idx) => {
       const mat = trail.material as THREE.MeshBasicMaterial;
       mat.opacity = opacity;
       trail.scale.setScalar(1);
-      trail.scale.z = lengthScale;
+      const jitter = 1 + this.trailJitterAmp * Math.sin(t * this.trailJitterFreq + idx * 1.4); // subtle dynamic length change
+      trail.scale.z = baseLength * jitter;
       trail.visible = mat.opacity > 0.02;
     });
   }
@@ -410,6 +423,8 @@ export class PlayerController {
       this.overboostRemainingMs = Math.min(this.overboostBudgetMs, this.overboostRemainingMs + delta * 1000);
     }
 
+    boostFactor = this.applyLateBoostRamp(boostFactor, maxBoost);
+
     const targetSpeed = this.config.baseSpeed * boostFactor;
     const accelRate = 0.75;
     const baseSmoothing = 1 - Math.exp(-accelRate * delta);
@@ -417,17 +432,26 @@ export class PlayerController {
     this.currentSpeed = THREE.MathUtils.lerp(this.currentSpeed, targetSpeed, easeOut);
   }
 
+  private applyLateBoostRamp(boostFactor: number, maxBoost: number): number {
+    // Last 30% of boost curve doubles the current boost for a final surge
+    const boostFraction = boostFactor > 1 ? (boostFactor - 1) / Math.max(1e-6, maxBoost - 1) : 0;
+    if (boostFraction >= 0.7) {
+      return boostFactor * 2;
+    }
+    return boostFactor;
+  }
+
   private updateTransform(delta: number, input: InputState): void {
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.root.quaternion).normalize();
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.root.quaternion).normalize();
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.root.quaternion).normalize();
+    this.tmpForward.set(0, 0, -1).applyQuaternion(this.root.quaternion).normalize();
+    this.tmpRight.set(1, 0, 0).applyQuaternion(this.root.quaternion).normalize();
+    this.tmpUp.set(0, 1, 0).applyQuaternion(this.root.quaternion).normalize();
 
-    const move = new THREE.Vector3();
-    move.addScaledVector(forward, this.currentSpeed);
-    move.addScaledVector(right, this.config.strafeSpeed * ((input.right ? 1 : 0) - (input.left ? 1 : 0)));
-    move.addScaledVector(up, this.config.strafeSpeed * ((input.up ? 1 : 0) - (input.down ? 1 : 0)));
+    this.tmpMove.set(0, 0, 0);
+    this.tmpMove.addScaledVector(this.tmpForward, this.currentSpeed);
+    this.tmpMove.addScaledVector(this.tmpRight, this.config.strafeSpeed * ((input.right ? 1 : 0) - (input.left ? 1 : 0)));
+    this.tmpMove.addScaledVector(this.tmpUp, this.config.strafeSpeed * ((input.up ? 1 : 0) - (input.down ? 1 : 0)));
 
-    this.root.position.addScaledVector(move, delta);
+    this.root.position.addScaledVector(this.tmpMove, delta);
 
     const yawChange = ((input.left ? 1 : 0) - (input.right ? 1 : 0)) * delta * 0.9; // slower yaw for smoother turns
     const pitchChange = ((input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0)) * delta * 1.3;
