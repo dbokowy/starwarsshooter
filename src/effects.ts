@@ -92,9 +92,9 @@ export class EngineFlames {
       const flicker = 1 + Math.sin(time * 1.8 + idx * 0.7) * 0.06 + Math.random() * 0.04;
       const leanScale = 1 + -sideSign * leanStrength * 0.3; // right turn -> left engines longer, right shorter
       const verticalInfluence = (offset.y >= 0 ? -1 : 1) * vertStrength; // up -> top shrink, bottom grow
-      const verticalScale = THREE.MathUtils.clamp(1 + verticalInfluence * 1.2, 0.5, 2.0); // stronger bias so effect is visible
+      const verticalScale = THREE.MathUtils.clamp(1 + verticalInfluence * 0.9, 0.7, 1.85); // softer top shrink, still visible bottom effect
       const lengthScale = THREE.MathUtils.lerp(1.1, 6.8, flare) * flicker * leanScale * verticalScale;
-      const radiusScaleBias = THREE.MathUtils.clamp(1 + verticalInfluence * 0.65, 0.65, 1.6);
+      const radiusScaleBias = THREE.MathUtils.clamp(1 + verticalInfluence * 0.45, 0.85, 1.4);
       const radiusScale = THREE.MathUtils.lerp(0.65, 1.6, flare) * flicker; // keep current max diameter
       flame.scale.set(
         flame.userData.baseRadius * radiusScale * radiusScaleBias,
