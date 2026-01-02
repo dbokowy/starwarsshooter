@@ -50,6 +50,7 @@ const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, re
 const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
 const prevPlayerPos = new THREE.Vector3();
 const playerDrift = new THREE.Vector3();
+let speedBlurActive = false;
 
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
@@ -173,6 +174,7 @@ function update() {
   const playerForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion).normalize();
   spaceDust.update(delta, player.root.position, playerVelocity, playerForward);
   starfield.update(delta, playerDrift);
+  updateSpeedBlurClass(player.currentSpeed, PLAYER_CONFIG);
   handleAsteroidBulletHits();
   handleAsteroidCollisions(onEnemyDestroyed);
   updateSunHalo(elapsed);
@@ -287,7 +289,15 @@ function createScene(): THREE.Scene {
   return newScene;
 }
 
-// speed blur removed
+function updateSpeedBlurClass(currentSpeed: number, config: PlayerConfig): void {
+  const maxSpeed = config.baseSpeed * config.boostMultiplier;
+  const speedFactor = maxSpeed > 0 ? currentSpeed / maxSpeed : 0;
+  const shouldBlur = speedFactor >= 0.7;
+  if (shouldBlur !== speedBlurActive) {
+    speedBlurActive = shouldBlur;
+    document.body.classList.toggle('speed-blur', shouldBlur);
+  }
+}
 
 function playBackgroundMusic() {
   if (!musicReady || !bgMusicEl) return;
@@ -464,7 +474,7 @@ function bindToggles(): void {
       const idx = getNearestAsteroidInView(camera);
       if (idx === -1) return;
       const ast = asteroids[idx];
-      explosions.trigger(ast.mesh.position, ast.radius * 1.4);
+      explosions.trigger(ast.mesh.position, ast.radius * 1.4, undefined, { scaleMultiplier: 1 / 3, intensity: 1 });
       removeAsteroid(idx);
     });
   }
@@ -649,7 +659,7 @@ function handleAsteroidBulletHits(): void {
       if (bullet.mesh.position.distanceTo(ast.mesh.position) <= hitRadius) {
         scene.remove(bullet.mesh);
         player.bullets.splice(j, 1);
-        explosions.trigger(ast.mesh.position, ast.radius * 1.4);
+        explosions.trigger(ast.mesh.position, ast.radius * 1.4, undefined, { scaleMultiplier: 1 / 3, intensity: 1 });
         removeAsteroid(i);
         break;
       }
@@ -677,7 +687,7 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
     for (const root of enemyRoots) {
       if (pos.distanceTo(root.position) <= ast.radius + 8) {
         if (enemies.destroyEnemyByRoot(root)) {
-          explosions.trigger(pos, player.collisionRadius * 1.6);
+          explosions.trigger(pos, player.collisionRadius * 1.6, undefined, { scaleMultiplier: 1 / 3, intensity: 1 });
           onEnemyDestroyedCb();
           removeAsteroid(i);
           collided = true;

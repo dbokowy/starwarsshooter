@@ -85,6 +85,7 @@ export class EngineFlames {
     const flare = 0.25 + boostNorm * 0.95;
     const leanStrength = THREE.MathUtils.clamp(turnLean, -1, 1);
     const vertStrength = THREE.MathUtils.clamp(verticalLean, -1, 1); // up>0, down<0 from raw controls
+    const rollStrength = Math.abs(rollBend);
 
     this.flames.forEach((flame, idx) => {
       const offset = flame.userData.offset as THREE.Vector3;
@@ -93,9 +94,10 @@ export class EngineFlames {
       const leanScale = 1 + -sideSign * leanStrength * 0.3; // right turn -> left engines longer, right shorter
       const verticalInfluence = (offset.y >= 0 ? -1 : 1) * vertStrength; // up -> top shrink, bottom grow
       const verticalScale = THREE.MathUtils.clamp(1 + verticalInfluence * 0.9, 0.7, 1.85); // softer top shrink, still visible bottom effect
-      const lengthScale = THREE.MathUtils.lerp(1.1, 6.8, flare) * flicker * leanScale * verticalScale;
-      const radiusScaleBias = THREE.MathUtils.clamp(1 + verticalInfluence * 0.45, 0.85, 1.4);
-      const radiusScale = THREE.MathUtils.lerp(0.65, 1.6, flare) * flicker; // keep current max diameter
+      const rollScale = 1 + rollStrength * 0.8;
+      const lengthScale = THREE.MathUtils.lerp(1.1, 6.8, flare) * flicker * leanScale * verticalScale * rollScale;
+      const radiusScaleBias = THREE.MathUtils.clamp(1 + verticalInfluence * 0.45 + rollStrength * 0.25, 0.85, 1.45);
+      const radiusScale = THREE.MathUtils.lerp(0.65, 1.6, flare) * flicker;
       flame.scale.set(
         flame.userData.baseRadius * radiusScale * radiusScaleBias,
         flame.userData.baseLength * lengthScale,

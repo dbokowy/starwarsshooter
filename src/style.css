@@ -623,7 +623,8 @@ body.is-touch .mobile-controls {
   display: grid !important;
 }
 
-body.roll-blur canvas {
+body.roll-blur canvas,
+body.speed-blur canvas {
   filter: blur(1.4px) saturate(1.2);
 }
 
