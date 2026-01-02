@@ -84,17 +84,17 @@ export class EngineFlames {
     const boostNorm = THREE.MathUtils.clamp((currentSpeed - baseSpeed) / (baseSpeed * (boostMultiplier - 1)), 0, 1);
     const flare = 0.25 + boostNorm * 0.95;
     const leanStrength = THREE.MathUtils.clamp(turnLean, -1, 1);
-    const vertStrength = THREE.MathUtils.clamp(verticalLean, -1, 1);
+    const vertStrength = THREE.MathUtils.clamp(verticalLean, -1, 1); // up>0, down<0 from raw controls
 
     this.flames.forEach((flame, idx) => {
       const offset = flame.userData.offset as THREE.Vector3;
       const sideSign = offset.x < 0 ? -1 : 1; // left negative, right positive
       const flicker = 1 + Math.sin(time * 1.8 + idx * 0.7) * 0.06 + Math.random() * 0.04;
       const leanScale = 1 + -sideSign * leanStrength * 0.3; // right turn -> left engines longer, right shorter
-      const verticalInfluence = (offset.y >= 0 ? -1 : 1) * vertStrength;
-      const verticalScale = THREE.MathUtils.clamp(1 + verticalInfluence * 1.05, 0.55, 1.9); // stronger bias so effect is visible
+      const verticalInfluence = (offset.y >= 0 ? -1 : 1) * vertStrength; // up -> top shrink, bottom grow
+      const verticalScale = THREE.MathUtils.clamp(1 + verticalInfluence * 1.2, 0.5, 2.0); // stronger bias so effect is visible
       const lengthScale = THREE.MathUtils.lerp(1.1, 6.8, flare) * flicker * leanScale * verticalScale;
-      const radiusScaleBias = THREE.MathUtils.clamp(1 + verticalInfluence * 0.55, 0.7, 1.5);
+      const radiusScaleBias = THREE.MathUtils.clamp(1 + verticalInfluence * 0.65, 0.65, 1.6);
       const radiusScale = THREE.MathUtils.lerp(0.65, 1.6, flare) * flicker; // keep current max diameter
       flame.scale.set(
         flame.userData.baseRadius * radiusScale * radiusScaleBias,

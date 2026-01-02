@@ -11,6 +11,7 @@ import { PlayerController } from './player.js';
 import { CameraRigController } from './camera.js';
 import { ExplosionManager } from './explosions.js';
 import { EnemySquadron, Obstacle } from './enemy.js';
+import type { PlayerConfig } from './types.js';
 
 const IS_MOBILE = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1;
 const loadingManager = new THREE.LoadingManager();
@@ -19,6 +20,7 @@ const scene = createScene();
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 25000);
 const listener = new AudioListener();
 camera.add(listener);
+scene.add(camera);
 const clock = new THREE.Clock();
 const loader = new GLTFLoader(loadingManager);
 const audioLoader = new AudioLoader(loadingManager);
@@ -48,6 +50,8 @@ const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, re
 const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
 const prevPlayerPos = new THREE.Vector3();
 const playerDrift = new THREE.Vector3();
+const speedBlur = createSpeedBlurOverlay();
+camera.add(speedBlur);
 
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
@@ -171,6 +175,7 @@ function update() {
   const playerForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion).normalize();
   spaceDust.update(delta, player.root.position, playerVelocity, playerForward);
   starfield.update(delta, playerDrift);
+  updateSpeedBlur(player.currentSpeed, PLAYER_CONFIG);
   handleAsteroidBulletHits();
   handleAsteroidCollisions(onEnemyDestroyed);
   updateSunHalo(elapsed);
@@ -283,6 +288,70 @@ function createScene(): THREE.Scene {
   newScene.background = new THREE.Color(0x000000);
   newScene.fog = new THREE.FogExp2(0x000000, 0.001);
   return newScene;
+}
+
+function createSpeedBlurOverlay(): THREE.Sprite {
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const center = size / 2;
+    const grad = ctx.createRadialGradient(center, center, size * 0.18, center, center, size * 0.6);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.45, 'rgba(255,255,255,0.14)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 3.5;
+    for (let i = 0; i < 36; i += 1) {
+      const angle = (i / 36) * Math.PI * 2;
+      const r1 = size * 0.28;
+      const r2 = size * 0.55;
+      const x1 = center + Math.cos(angle) * r1;
+      const y1 = center + Math.sin(angle) * r1;
+      const x2 = center + Math.cos(angle) * r2;
+      const y2 = center + Math.sin(angle) * r2;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.encoding = THREE.sRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    opacity: 0,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(3.8, 3.8, 1); // cover view; adjusted per aspect in update
+  sprite.renderOrder = 10000;
+  sprite.frustumCulled = false;
+  return sprite;
+}
+
+function updateSpeedBlur(currentSpeed: number, config: PlayerConfig): void {
+  const mat = speedBlur.material as THREE.SpriteMaterial;
+  const maxSpeed = config.baseSpeed * config.boostMultiplier;
+  const speedFactor = maxSpeed > 0 ? currentSpeed / maxSpeed : 0;
+  const speedRatio = THREE.MathUtils.clamp((speedFactor - 0.7) / 0.3, 0, 1); // kick in above 70% of max
+  const targetOpacity = THREE.MathUtils.clamp(speedRatio * 0.75, 0, 0.75);
+  mat.opacity = THREE.MathUtils.lerp(mat.opacity, targetOpacity, 0.28);
+
+  const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+  speedBlur.scale.set(3.8 * aspect, 3.8, 1);
+  speedBlur.position.set(0, 0, -0.3); // inside camera space
 }
 
 function playBackgroundMusic() {

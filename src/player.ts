@@ -480,18 +480,18 @@ export class PlayerController {
     const yawIntent = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const pitchIntent = (input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0);
     const verticalIntent = THREE.MathUtils.clamp(
-      (input.up ? 1 : 0) - (input.down ? 1 : 0) + pitchIntent * 0.35, // restore modest pitch influence
+      (input.up ? 1 : 0) - (input.down ? 1 : 0) + pitchIntent * 0.5, // include pitch so climb/dive still affect exhaust
       -1,
       1
     );
 
-    const yawTarget = this.root.rotation.y + yawIntent * -delta * 0.9;
-    const pitchTargetUnclamped = this.root.rotation.x + pitchIntent * delta * 1.3;
+    const yawTarget = this.root.rotation.y + yawIntent * -delta * 1.85; // more responsive yaw
+    const pitchTargetUnclamped = this.root.rotation.x + pitchIntent * delta * 1.5;
     const maxPitch = Math.PI / 3 + THREE.MathUtils.degToRad(15); // allow an extra 15 deg up/down
     const pitchTarget = THREE.MathUtils.clamp(pitchTargetUnclamped, -maxPitch, maxPitch);
 
-    const yawSmooth = 1 - Math.exp(-5 * delta); // smoother yaw ease
-    const pitchSmooth = 1 - Math.exp(-6 * delta);
+    const yawSmooth = 1 - Math.exp(-14 * delta); // faster blend toward target yaw
+    const pitchSmooth = 1 - Math.exp(-8 * delta);
     this.root.rotation.y = THREE.MathUtils.lerp(this.root.rotation.y, yawTarget, yawSmooth);
     this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, pitchTarget, pitchSmooth);
 
@@ -513,7 +513,7 @@ export class PlayerController {
         document.body.classList.remove('roll-blur');
       }
     } else {
-      const rollSmooth = 1 - Math.exp(-6 * delta);
+      const rollSmooth = 1 - Math.exp(-8 * delta);
       this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, targetRoll, rollSmooth); // slower roll easing for smoother banking
     }
 
@@ -522,7 +522,7 @@ export class PlayerController {
     const leanSmooth = 1 - Math.exp(-4 * delta);
     this.turnLean = THREE.MathUtils.lerp(this.turnLean, desiredLean, leanSmooth);
 
-    const verticalSmooth = 1 - Math.exp(-5 * delta);
+    const verticalSmooth = 1 - Math.exp(-10 * delta);
     this.verticalLean = THREE.MathUtils.lerp(this.verticalLean, verticalIntent, verticalSmooth);
   }
 
