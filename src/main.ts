@@ -11,7 +11,6 @@ import { PlayerController } from './player.js';
 import { CameraRigController } from './camera.js';
 import { ExplosionManager } from './explosions.js';
 import { EnemySquadron, Obstacle } from './enemy.js';
-import type { PlayerConfig } from './types.js';
 
 const IS_MOBILE = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1;
 const loadingManager = new THREE.LoadingManager();
@@ -50,7 +49,6 @@ const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, re
 const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
 const prevPlayerPos = new THREE.Vector3();
 const playerDrift = new THREE.Vector3();
-let speedBlurActive = false;
 
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
@@ -174,7 +172,6 @@ function update() {
   const playerForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion).normalize();
   spaceDust.update(delta, player.root.position, playerVelocity, playerForward);
   starfield.update(delta, playerDrift);
-  updateSpeedBlurClass(player.currentSpeed, PLAYER_CONFIG);
   handleAsteroidBulletHits();
   handleAsteroidCollisions(onEnemyDestroyed);
   updateSunHalo(elapsed);
@@ -289,15 +286,6 @@ function createScene(): THREE.Scene {
   return newScene;
 }
 
-function updateSpeedBlurClass(currentSpeed: number, config: PlayerConfig): void {
-  const maxSpeed = config.baseSpeed * config.boostMultiplier;
-  const speedFactor = maxSpeed > 0 ? currentSpeed / maxSpeed : 0;
-  const shouldBlur = speedFactor >= 0.7;
-  if (shouldBlur !== speedBlurActive) {
-    speedBlurActive = shouldBlur;
-    document.body.classList.toggle('speed-blur', shouldBlur);
-  }
-}
 
 function playBackgroundMusic() {
   if (!musicReady || !bgMusicEl) return;
