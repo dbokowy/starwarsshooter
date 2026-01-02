@@ -530,6 +530,12 @@ async function advanceWave(): Promise<void> {
   } else if (wave === 3) {
     wave = 4;
     scheduleNextWave(4);
+  } else if (wave === 4) {
+    wave = 5;
+    scheduleNextWave(6);
+  } else if (wave === 5) {
+    wave = 6;
+    scheduleNextWave(8);
   } else {
     handleVictory();
   }
