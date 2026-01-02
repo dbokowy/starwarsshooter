@@ -99,54 +99,27 @@ export function createStarfield(scene: THREE.Scene, densityScale: number = 1): S
   };
 }
 
-export function createSun(scene: THREE.Scene, position: THREE.Vector3, radius: number = 600): THREE.Object3D {
-  // emissive sphere (core)
-  const sunGeom = new THREE.SphereGeometry(radius * 0.3, 48, 48); // small solid core, mostly hidden by glow
-  const sunMat = new THREE.MeshBasicMaterial({
-    color: 0x000000,
-    emissive: 0x000000,
-    emissiveIntensity: 0,
-    transparent: true,
-    opacity: 0,
-    fog: false
-  });
-  const sunMesh = new THREE.Mesh(sunGeom, sunMat);
-  sunMesh.position.set(0, 0, 0);
-  sunMesh.frustumCulled = false;
-  sunMesh.renderOrder = 2;
-
-  // soft core glow sprite to blur the center
-  const coreMat = new THREE.SpriteMaterial({
-    map: getCoreTexture(),
-    color: 0xfff4d0,
-    transparent: true,
-    opacity: 0.9,
-    alphaTest: 0.01,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    depthTest: false,
-    fog: false
-  });
-  const coreSprite = new THREE.Sprite(coreMat);
-  const coreScale = radius * 6; // soft core glow
-  coreSprite.scale.set(coreScale, coreScale, 1);
-  coreSprite.renderOrder = 4;
-  coreSprite.frustumCulled = false;
-
-  // halo sprite
+export async function createSun(
+  scene: THREE.Scene,
+  position: THREE.Vector3,
+  radius: number = 600,
+  loader?: GLTFLoader,
+  assetsPath?: string,
+  planet?: THREE.Object3D
+): Promise<THREE.Object3D> {
   const haloMat = new THREE.SpriteMaterial({
     map: getHaloTexture(),
-    color: 0xffd890,
+    color: 0xffffff,
     transparent: true,
-    opacity: 0.28,
-    alphaTest: 0.01,
+    opacity: 0,
+    alphaTest: 0.001,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: false,
     fog: false
   });
   const halo = new THREE.Sprite(haloMat);
-  const haloScale = radius * 12; // wider falloff
+  const haloScale = radius * 9.6; // 20% smaller
   halo.scale.set(haloScale, haloScale, 1);
   halo.renderOrder = 5;
   halo.frustumCulled = false;
@@ -154,10 +127,48 @@ export function createSun(scene: THREE.Scene, position: THREE.Vector3, radius: n
 
   const sunGroup = new THREE.Group();
   sunGroup.add(halo);
-  sunGroup.add(coreSprite);
-  sunGroup.add(sunMesh);
   sunGroup.position.copy(position);
   sunGroup.frustumCulled = false;
+  sunGroup.name = 'sun-group';
+
+  // Opaque white core sphere (~1% of planet size; fallback to small fraction of halo)
+  let coreScale = haloScale * 0.0033; // 3x smaller core (fallback)
+  if (planet) {
+    const planetBox = new THREE.Box3().setFromObject(planet);
+    const planetSize = planetBox.getSize(new THREE.Vector3()).length() || 1;
+    coreScale = planetSize * 0.00033; // 3x smaller core vs previous
+  }
+  const coreGeom = new THREE.SphereGeometry(coreScale * 0.5, 24, 24);
+  const coreMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    emissive: 0xffffff,
+    emissiveIntensity: 2,
+    fog: false
+  });
+  const coreMesh = new THREE.Mesh(coreGeom, coreMat);
+  coreMesh.renderOrder = 6;
+  coreMesh.frustumCulled = false;
+  sunGroup.add(coreMesh);
+
+  // soft gradient glow around the core (5x diameter)
+  const coreGlowMat = new THREE.SpriteMaterial({
+    map: getHaloTexture(),
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.8,
+    alphaTest: 0.001,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+    fog: false
+  });
+  const coreGlow = new THREE.Sprite(coreGlowMat);
+  const glowScale = coreScale * 1000; // extended gradient reach
+  coreGlow.scale.set(glowScale, glowScale, 1);
+  coreGlow.renderOrder = 5.5;
+  coreGlow.frustumCulled = false;
+  sunGroup.add(coreGlow);
+
   scene.add(sunGroup);
   return sunGroup;
 }
@@ -171,11 +182,12 @@ function getHaloTexture(): THREE.Texture {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    const grad = ctx.createRadialGradient(size / 2, size / 2, size * 0.05, size / 2, size / 2, size * 0.6);
-    grad.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
-    grad.addColorStop(0.2, 'rgba(255, 230, 180, 0.5)');
-    grad.addColorStop(0.5, 'rgba(255, 200, 120, 0.22)');
-    grad.addColorStop(1, 'rgba(255, 200, 120, 0)');
+    const grad = ctx.createRadialGradient(size / 2, size / 2, size * 0.05, size / 2, size / 2, size * 0.55);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    grad.addColorStop(0.2, 'rgba(255, 255, 255, 0.4)'); // ~60% drop by 20%
+    grad.addColorStop(0.4, 'rgba(255, 220, 180, 0.18)');
+    grad.addColorStop(0.7, 'rgba(255, 200, 120, 0.09)');
+    grad.addColorStop(1, 'rgba(255, 170, 80, 0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
   }

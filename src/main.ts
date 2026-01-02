@@ -98,9 +98,9 @@ loadingManager.onLoad = () => {
 async function init() {
   document.body.classList.toggle('is-touch', IS_MOBILE);
   const sunPos = new THREE.Vector3(-13000, 1600, -9000); // further left, closer in front of planet
-  sun = createSun(scene, sunPos, 784) as THREE.Mesh; // reduced sun size by ~30%
-  setupLights(scene, !IS_MOBILE, sunPos.clone().normalize());
   planet = await loadEnvironment(loader, scene, ASSETS_PATH);
+  sun = (await createSun(scene, sunPos, 784, loader, ASSETS_PATH, planet)) as THREE.Mesh; // reduced sun size by ~30%
+  setupLights(scene, !IS_MOBILE, sunPos.clone().normalize());
   if (!IS_MOBILE) {
     destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
   }
