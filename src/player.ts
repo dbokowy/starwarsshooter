@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Bullet, InputState, PlayArea, PlayerConfig } from './types.js';
 import { EngineFlames } from './effects.js';
@@ -46,6 +46,9 @@ export class PlayerController {
   private hitSoundBuffer: AudioBuffer | null = null;
   private wingTrails: THREE.Mesh[] = [];
   private readonly trailsEnabled = true;
+  private trailsVisible = true;
+  private turnLean = 0;
+  private verticalLean = 0;
   private readonly trailJitterFreq = 3.2;
   private readonly trailJitterAmp = 0.08;
   private readonly trailVisibilityThreshold = 0.5; // fraction of top speed
@@ -118,7 +121,15 @@ export class PlayerController {
 
   updateFlames(time: number): void {
     if (this.destroyed) return;
-    this.engineFlames.update(this.currentSpeed, this.config.baseSpeed, this.config.boostMultiplier, time, this.getRollBend());
+    this.engineFlames.update(
+      this.currentSpeed,
+      this.config.baseSpeed,
+      this.config.boostMultiplier,
+      time,
+      this.getRollBend(),
+      this.turnLean,
+      this.verticalLean
+    );
     this.updateWingTrails();
   }
 
@@ -209,6 +220,8 @@ export class PlayerController {
     this.destroyed = false;
     this.health = this.config.maxHealth;
     this.currentSpeed = this.config.baseSpeed;
+    this.turnLean = 0;
+    this.verticalLean = 0;
     this.root.position.copy(this.startPosition);
     this.root.rotation.set(0, 0, 0);
     this.setShipVisible(true);
@@ -231,6 +244,7 @@ export class PlayerController {
       this.model.visible = visible;
     }
     this.engineFlames.setVisible(visible);
+    this.setTrailVisibility(visible);
   }
 
   isDestroyed(): boolean {
@@ -358,8 +372,18 @@ export class PlayerController {
     });
   }
 
+  private setTrailVisibility(visible: boolean): void {
+    this.trailsVisible = visible;
+    this.wingTrails.forEach(trail => {
+      trail.visible = visible;
+      const mat = trail.material as THREE.MeshBasicMaterial;
+      if (!visible) mat.opacity = 0;
+    });
+  }
+
   private updateWingTrails(): void {
     if (!this.trailsEnabled) return;
+    if (!this.trailsVisible) return;
     if (!this.wingTrails.length) return;
     const speedRatio = THREE.MathUtils.clamp(
       (this.currentSpeed - this.config.baseSpeed * 0.5) / (this.config.baseSpeed * this.config.boostMultiplier - this.config.baseSpeed * 0.5),
@@ -453,12 +477,23 @@ export class PlayerController {
 
     this.root.position.addScaledVector(this.tmpMove, delta);
 
-    const yawChange = ((input.left ? 1 : 0) - (input.right ? 1 : 0)) * delta * 0.9; // slower yaw for smoother turns
-    const pitchChange = ((input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0)) * delta * 1.3;
+    const yawIntent = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const pitchIntent = (input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0);
+    const verticalIntent = THREE.MathUtils.clamp(
+      (input.up ? 1 : 0) - (input.down ? 1 : 0) + pitchIntent * 0.5, // include pitch so climb/dive still affect exhaust
+      -1,
+      1
+    );
 
-    this.root.rotation.y += yawChange;
-    const maxPitch = Math.PI / 3 + THREE.MathUtils.degToRad(15); // allow an extra 15° up/down
-    this.root.rotation.x = THREE.MathUtils.clamp(this.root.rotation.x + pitchChange, -maxPitch, maxPitch);
+    const yawTarget = this.root.rotation.y + yawIntent * -delta * 1.85; // more responsive yaw
+    const pitchTargetUnclamped = this.root.rotation.x + pitchIntent * delta * 1.5;
+    const maxPitch = Math.PI / 3 + THREE.MathUtils.degToRad(15); // allow an extra 15 deg up/down
+    const pitchTarget = THREE.MathUtils.clamp(pitchTargetUnclamped, -maxPitch, maxPitch);
+
+    const yawSmooth = 1 - Math.exp(-14 * delta); // faster blend toward target yaw
+    const pitchSmooth = 1 - Math.exp(-8 * delta);
+    this.root.rotation.y = THREE.MathUtils.lerp(this.root.rotation.y, yawTarget, yawSmooth);
+    this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, pitchTarget, pitchSmooth);
 
     const targetRoll = THREE.MathUtils.clamp(
       ((input.left ? 1 : 0) - (input.right ? 1 : 0)) * 1,
@@ -478,8 +513,17 @@ export class PlayerController {
         document.body.classList.remove('roll-blur');
       }
     } else {
-      this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, targetRoll, 0.08); // slower roll easing for smoother banking
+      const rollSmooth = 1 - Math.exp(-8 * delta);
+      this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, targetRoll, rollSmooth); // slower roll easing for smoother banking
     }
+
+    const rollLean = this.rolling ? -this.rollDir : 0; // right roll -> positive lean
+    const desiredLean = THREE.MathUtils.clamp(yawIntent * 0.8 + rollLean * 0.7, -1, 1);
+    const leanSmooth = 1 - Math.exp(-4 * delta);
+    this.turnLean = THREE.MathUtils.lerp(this.turnLean, desiredLean, leanSmooth);
+
+    const verticalSmooth = 1 - Math.exp(-10 * delta);
+    this.verticalLean = THREE.MathUtils.lerp(this.verticalLean, verticalIntent, verticalSmooth);
   }
 
   private clampToPlayArea(): void {
@@ -488,3 +532,5 @@ export class PlayerController {
     this.root.position.y = Math.max(this.playArea.minY, Math.min(this.playArea.maxY, this.root.position.y));
   }
 }
+
+

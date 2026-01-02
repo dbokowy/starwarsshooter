@@ -11,6 +11,7 @@ import { PlayerController } from './player.js';
 import { CameraRigController } from './camera.js';
 import { ExplosionManager } from './explosions.js';
 import { EnemySquadron, Obstacle } from './enemy.js';
+import type { PlayerConfig } from './types.js';
 
 const IS_MOBILE = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1;
 const loadingManager = new THREE.LoadingManager();
@@ -19,6 +20,7 @@ const scene = createScene();
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 25000);
 const listener = new AudioListener();
 camera.add(listener);
+scene.add(camera);
 const clock = new THREE.Clock();
 const loader = new GLTFLoader(loadingManager);
 const audioLoader = new AudioLoader(loadingManager);
@@ -42,10 +44,13 @@ type AsteroidPrefab = { scene: THREE.Object3D; radius: number };
 const asteroidPrefabs: AsteroidPrefab[] = [];
 let highlightAsteroids = false;
 const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElement);
+const frustum = new THREE.Frustum();
+const projScreenMatrix = new THREE.Matrix4();
 const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, renderer.capabilities.getMaxAnisotropy());
 const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
 const prevPlayerPos = new THREE.Vector3();
 const playerDrift = new THREE.Vector3();
+let speedBlurActive = false;
 
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
@@ -56,6 +61,7 @@ const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElement | null;
 const controlsModal = document.getElementById('controls-modal') as HTMLElement | null;
 const controlsCloseBtn = document.getElementById('controls-close') as HTMLButtonElement | null;
+const fpsEl = document.getElementById('dev-fps') as HTMLElement | null;
 let devUiVisible = false;
 const toggleDevUi = (visible: boolean) => {
   devUiVisible = visible;
@@ -63,7 +69,9 @@ const toggleDevUi = (visible: boolean) => {
   if (enemyFireBtn) enemyFireBtn.style.display = visible ? 'inline-flex' : 'none';
   if (enemyExplosionBtn) enemyExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
   if (asteroidHighlightBtn) asteroidHighlightBtn.style.display = visible ? 'inline-flex' : 'none';
-  if (fullscreenBtn) fullscreenBtn.style.display = 'inline-flex'; // always visible
+  if (asteroidExplosionBtn) asteroidExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (musicToggleBtn) musicToggleBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (fpsEl) fpsEl.style.display = visible ? 'block' : 'none';
 };
 const devToggleHandler = (event: KeyboardEvent) => {
   if (event.code === 'KeyT') {
@@ -74,6 +82,8 @@ const immortalityBtn = document.getElementById('toggle-immortal') as HTMLButtonE
 const enemyFireBtn = document.getElementById('toggle-enemy-fire') as HTMLButtonElement | null;
 const enemyExplosionBtn = document.getElementById('trigger-enemy-explosion') as HTMLButtonElement | null;
 const asteroidHighlightBtn = document.getElementById('toggle-asteroid-highlight') as HTMLButtonElement | null;
+const asteroidExplosionBtn = document.getElementById('trigger-asteroid-explosion') as HTMLButtonElement | null;
+const musicToggleBtn = document.getElementById('toggle-music') as HTMLButtonElement | null;
 const resultModal = document.getElementById('result-modal') as HTMLElement | null;
 const resultMessage = document.getElementById('result-message') as HTMLElement | null;
 const resultRetryBtn = document.getElementById('result-retry') as HTMLButtonElement | null;
@@ -147,6 +157,9 @@ function update() {
   const delta = clock.getDelta();
   const elapsed = clock.getElapsedTime();
   const now = performance.now();
+  if (fpsEl && devUiVisible && delta > 0) {
+    fpsEl.textContent = `${(1 / delta).toFixed(0)} fps`;
+  }
 
   player.update(delta, inputController.state);
   player.updateBullets(delta);
@@ -161,6 +174,7 @@ function update() {
   const playerForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion).normalize();
   spaceDust.update(delta, player.root.position, playerVelocity, playerForward);
   starfield.update(delta, playerDrift);
+  updateSpeedBlurClass(player.currentSpeed, PLAYER_CONFIG);
   handleAsteroidBulletHits();
   handleAsteroidCollisions(onEnemyDestroyed);
   updateSunHalo(elapsed);
@@ -273,6 +287,16 @@ function createScene(): THREE.Scene {
   newScene.background = new THREE.Color(0x000000);
   newScene.fog = new THREE.FogExp2(0x000000, 0.001);
   return newScene;
+}
+
+function updateSpeedBlurClass(currentSpeed: number, config: PlayerConfig): void {
+  const maxSpeed = config.baseSpeed * config.boostMultiplier;
+  const speedFactor = maxSpeed > 0 ? currentSpeed / maxSpeed : 0;
+  const shouldBlur = speedFactor >= 0.7;
+  if (shouldBlur !== speedBlurActive) {
+    speedBlurActive = shouldBlur;
+    document.body.classList.toggle('speed-blur', shouldBlur);
+  }
 }
 
 function playBackgroundMusic() {
@@ -445,19 +469,47 @@ function bindToggles(): void {
     asteroidHighlightBtn.textContent = 'Podswietl asteroidy: OFF';
   }
 
+  if (asteroidExplosionBtn) {
+    asteroidExplosionBtn.addEventListener('click', () => {
+      const idx = getNearestAsteroidInView(camera);
+      if (idx === -1) return;
+      const ast = asteroids[idx];
+      explosions.trigger(ast.mesh.position, ast.radius * 1.4, undefined, { scaleMultiplier: 1 / 3, intensity: 1 });
+      removeAsteroid(idx);
+    });
+  }
+
   if (resultRetryBtn) {
     resultRetryBtn.addEventListener('click', () => {
       restartGame();
     });
   }
+
+  if (musicToggleBtn) {
+    musicToggleBtn.addEventListener('click', () => {
+      if (!bgMusicEl) return;
+      const enabled = !(bgMusicEl.muted ?? false);
+      bgMusicEl.muted = enabled;
+      musicToggleBtn.classList.toggle('active', !enabled);
+      musicToggleBtn.textContent = enabled ? 'Muzyka: OFF' : 'Muzyka: ON';
+      if (!enabled && musicReady && !bgMusicEl.paused) {
+        // ensure playback resumes if already loaded
+        bgMusicEl.play().catch(() => undefined);
+      }
+    });
+    musicToggleBtn.textContent = 'Muzyka: ON';
+    musicToggleBtn.classList.add('active');
+  }
 }
 
-function handlePlayerDestroyed(): void {
+function handlePlayerDestroyed(skipExplosion: boolean = false): void {
   if (!player.isDestroyed()) {
     player.destroy();
   }
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion);
-  explosions.trigger(player.root.position, player.collisionRadius * 1.6, forward);
+  if (!skipExplosion) {
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion);
+    explosions.trigger(player.root.position, player.collisionRadius * 1.6, forward);
+  }
   enemies.setFireEnabled(false);
   gameStarted = false;
   clearWinTimer();
@@ -493,6 +545,24 @@ async function advanceWave(): Promise<void> {
   } else {
     handleVictory();
   }
+}
+
+function getNearestAsteroidInView(cam: THREE.Camera): number {
+  projScreenMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+  frustum.setFromProjectionMatrix(projScreenMatrix);
+
+  let bestIdx = -1;
+  let bestDist = Infinity;
+  for (let i = 0; i < asteroids.length; i += 1) {
+    const pos = asteroids[i].mesh.position;
+    if (!frustum.containsPoint(pos)) continue;
+    const dist = cam.position.distanceToSquared(pos);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
 }
 
 async function loadAsteroidPrefabs(): Promise<void> {
@@ -589,7 +659,7 @@ function handleAsteroidBulletHits(): void {
       if (bullet.mesh.position.distanceTo(ast.mesh.position) <= hitRadius) {
         scene.remove(bullet.mesh);
         player.bullets.splice(j, 1);
-      explosions.trigger(ast.mesh.position, ast.radius * 1.4);
+        explosions.trigger(ast.mesh.position, ast.radius * 1.4, undefined, { scaleMultiplier: 1 / 3, intensity: 1 });
         removeAsteroid(i);
         break;
       }
@@ -606,6 +676,7 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
     if (!player.isDestroyed() && pos.distanceTo(player.root.position) <= ast.radius + player.collisionRadius) {
       explosions.trigger(pos, player.collisionRadius * 1.6);
       player.destroy();
+      handlePlayerDestroyed(true);
       removeAsteroid(i);
       continue;
     }
@@ -616,7 +687,7 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
     for (const root of enemyRoots) {
       if (pos.distanceTo(root.position) <= ast.radius + 8) {
         if (enemies.destroyEnemyByRoot(root)) {
-          explosions.trigger(pos, player.collisionRadius * 1.6);
+          explosions.trigger(pos, player.collisionRadius * 1.6, undefined, { scaleMultiplier: 1 / 3, intensity: 1 });
           onEnemyDestroyedCb();
           removeAsteroid(i);
           collided = true;
