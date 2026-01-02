@@ -65,15 +65,26 @@ export class EngineFlames {
     });
   }
 
-  update(currentSpeed: number, baseSpeed: number, boostMultiplier: number, time: number, rollBend: number = 0): void {
+  update(
+    currentSpeed: number,
+    baseSpeed: number,
+    boostMultiplier: number,
+    time: number,
+    rollBend: number = 0,
+    turnLean: number = 0
+  ): void {
     if (!this.flames.length) return;
 
     const boostNorm = THREE.MathUtils.clamp((currentSpeed - baseSpeed) / (baseSpeed * (boostMultiplier - 1)), 0, 1);
     const flare = 0.25 + boostNorm * 0.95;
+    const leanStrength = THREE.MathUtils.clamp(turnLean, -1, 1);
 
     this.flames.forEach((flame, idx) => {
+      const offset = flame.userData.offset as THREE.Vector3;
+      const sideSign = offset.x < 0 ? -1 : 1; // left negative, right positive
       const flicker = 1 + Math.sin(time * 1.8 + idx * 0.7) * 0.06 + Math.random() * 0.04;
-      const lengthScale = THREE.MathUtils.lerp(1.1, 6.8, flare) * flicker; // 2x previous max length at full throttle
+      const leanScale = 1 + -sideSign * leanStrength * 0.3; // right turn -> left engines longer, right shorter
+      const lengthScale = THREE.MathUtils.lerp(1.1, 6.8, flare) * flicker * leanScale;
       const radiusScale = THREE.MathUtils.lerp(0.65, 1.6, flare) * flicker; // keep current max diameter
       flame.scale.set(
         flame.userData.baseRadius * radiusScale,

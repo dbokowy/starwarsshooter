@@ -489,12 +489,14 @@ function bindToggles(): void {
   }
 }
 
-function handlePlayerDestroyed(): void {
+function handlePlayerDestroyed(skipExplosion: boolean = false): void {
   if (!player.isDestroyed()) {
     player.destroy();
   }
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion);
-  explosions.trigger(player.root.position, player.collisionRadius * 1.6, forward);
+  if (!skipExplosion) {
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion);
+    explosions.trigger(player.root.position, player.collisionRadius * 1.6, forward);
+  }
   enemies.setFireEnabled(false);
   gameStarted = false;
   clearWinTimer();
@@ -661,6 +663,7 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
     if (!player.isDestroyed() && pos.distanceTo(player.root.position) <= ast.radius + player.collisionRadius) {
       explosions.trigger(pos, player.collisionRadius * 1.6);
       player.destroy();
+      handlePlayerDestroyed(true);
       removeAsteroid(i);
       continue;
     }
