@@ -7,6 +7,7 @@ type ExplosionInstance = {
   mixer?: THREE.AnimationMixer;
   shockwave?: THREE.Sprite;
   particle?: THREE.Points;
+  isSphere: boolean;
   timeLeft: number;
   totalTime: number;
   startScale: number;
@@ -82,7 +83,7 @@ export class ExplosionManager {
           if ('depthWrite' in mat) mat.depthWrite = false;
           if ('fog' in mat) (mat as THREE.Material & { fog?: boolean }).fog = false;
           if ('blending' in mat) mat.blending = THREE.AdditiveBlending;
-          if ('color' in mat) (mat as THREE.MeshBasicMaterial).color?.set(0xffb078); // brightened warm tone
+          if ('color' in mat) (mat as THREE.MeshBasicMaterial).color?.set(0xffb078);
           if ('emissive' in mat) {
             (mat as THREE.MeshStandardMaterial).emissive?.set(0xcc5500);
             (mat as THREE.MeshStandardMaterial).emissiveIntensity = 0.8;
@@ -159,6 +160,7 @@ export class ExplosionManager {
     this.active.push({
       container,
       mixer,
+      isSphere,
       timeLeft: 1.2,
       totalTime: 1.2,
       startScale,
