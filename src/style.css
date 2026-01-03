@@ -84,6 +84,11 @@ canvas {
   transition: background-color 0.35s ease, opacity 0.35s ease, filter 0.35s ease;
 }
 
+.enemy-icon.interceptor {
+  mask-image: url('/assets/tie-interceptor-lineart.svg');
+  -webkit-mask-image: url('/assets/tie-interceptor-lineart.svg');
+}
+
 .enemy-icon.down {
   background-color: #16304f;
   opacity: 0.35;
@@ -177,6 +182,22 @@ canvas {
   background: linear-gradient(90deg, #11d8ff 0%, #0ba4e8 100%);
   width: 0%;
   transition: width 0.25s ease;
+}
+
+.loading-tip {
+  position: fixed;
+  bottom: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80vw;
+  max-width: 720px;
+  text-align: center;
+  color: #a7dbff;
+  letter-spacing: 0.12em;
+  font-size: 15px;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 40;
 }
 
 @keyframes spin {

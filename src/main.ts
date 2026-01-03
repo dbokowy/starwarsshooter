@@ -10,7 +10,7 @@ import { Hud } from './hud.js';
 import { PlayerController } from './player.js';
 import { CameraRigController } from './camera.js';
 import { ExplosionManager } from './explosions.js';
-import { EnemySquadron, Obstacle } from './enemy.js';
+import { EnemySquadron, EnemyType, Obstacle } from './enemy.js';
 
 const IS_MOBILE = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1;
 const loadingManager = new THREE.LoadingManager();
@@ -49,6 +49,9 @@ const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, re
 const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions, IS_MOBILE);
 const prevPlayerPos = new THREE.Vector3();
 const playerDrift = new THREE.Vector3();
+const viewForward = new THREE.Vector3();
+const viewUp = new THREE.Vector3();
+const viewRight = new THREE.Vector3();
 
 const enemyIconsEl = document.getElementById('enemy-icons-list') as HTMLElement | null;
 const hud = new Hud({
@@ -58,6 +61,15 @@ const hud = new Hud({
 const crosshairEl = document.getElementById('crosshair') as HTMLElement | null;
 const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElement | null;
+const loadingTipEl = document.querySelector('.loading-tip') as HTMLElement | null;
+const LOADING_TIPS = [
+  'Przy dużej liczbie wrogów dobrze jest schować się w pasie asteroidów',
+  'Podczas manewru beczki masz 70% mniej szans na trafienie',
+  'Statki wroga typu TIE Interceptor sa szybsze i zwrotniejsze od myśliwców TIE Fighter'
+];
+const MIN_LOADING_MS = 4000;
+let loadingShownAt = performance.now();
+let loadingHidden = false;
 const controlsModal = document.getElementById('controls-modal') as HTMLElement | null;
 const controlsCloseBtn = document.getElementById('controls-close') as HTMLButtonElement | null;
 const fpsEl = document.getElementById('dev-fps') as HTMLElement | null;
@@ -117,7 +129,9 @@ loadingManager.onLoad = () => {
 };
 
 async function init() {
+  loadingShownAt = performance.now();
   document.body.classList.toggle('is-touch', IS_MOBILE);
+  setRandomLoadingTip();
   toggleDevUi(false); // hide dev controls by default
   const sunPos = new THREE.Vector3(-13000, 1600, -9000); // further left, closer in front of planet
   planet = await loadEnvironment(loader, scene, ASSETS_PATH);
@@ -142,7 +156,7 @@ async function init() {
     new THREE.Vector3(0, -2, 0)
   );
   await enemies.init(1, player, destroyer ? destroyer.position : undefined);
-  resetEnemyIcons(enemies.getCount());
+  resetEnemyIcons(enemies.getEnemyTypes());
   hideLoading();
   prevPlayerPos.copy(player.root.position);
 
@@ -164,7 +178,11 @@ function update() {
     fpsEl.textContent = `${(1 / delta).toFixed(0)} fps`;
   }
 
-  player.update(delta, inputController.state);
+  camera.getWorldDirection(viewForward);
+  viewUp.set(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
+  viewRight.crossVectors(viewForward, viewUp).normalize();
+
+  player.update(delta, inputController.state, { up: viewUp, right: viewRight, forward: viewForward });
   player.updateBullets(delta);
   if (gameStarted && !player.isDestroyed()) {
     enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit, onEnemyDestroyed);
@@ -202,15 +220,7 @@ function updateCamera() {
   const offset = rigOffsets.cameraOffset.clone().multiplyScalar(cameraPullback);
 
   const desiredPosition = offset.applyQuaternion(player.root.quaternion).add(player.root.position);
-  // add subtle speed-based shake
-  const shakeStrength = throttle * 0.08;
-  const shake = new THREE.Vector3(
-    THREE.MathUtils.randFloatSpread(shakeStrength),
-    THREE.MathUtils.randFloatSpread(shakeStrength * 0.7),
-    THREE.MathUtils.randFloatSpread(shakeStrength * 0.6)
-  );
-
-  camera.position.lerp(desiredPosition.add(shake), 0.12);
+  camera.position.lerp(desiredPosition, 0.12);
 
   const lookTarget = rigOffsets.lookOffset.clone().applyQuaternion(player.root.quaternion).add(player.root.position);
   smoothedLook.lerp(lookTarget, 0.2);
@@ -356,8 +366,20 @@ function loadBackgroundMusic() {
 }
 
 function hideLoading() {
-  if (!loadingEl) return;
-  loadingEl.classList.add('hidden');
+  if (!loadingEl || loadingHidden) return;
+  const elapsed = performance.now() - loadingShownAt;
+  const delay = Math.max(0, MIN_LOADING_MS - elapsed);
+  window.setTimeout(() => {
+    if (loadingHidden) return;
+    loadingEl.classList.add('hidden');
+    loadingHidden = true;
+  }, delay);
+}
+
+function setRandomLoadingTip(): void {
+  if (!loadingTipEl || !LOADING_TIPS.length) return;
+  const tip = LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)];
+  loadingTipEl.textContent = tip;
 }
 
 function showControlsModal() {
@@ -390,29 +412,37 @@ function buildObstacles(): Obstacle[] {
   return list;
 }
 
-function resetEnemyIcons(count: number): void {
-  enemiesTotal = count;
+function resetEnemyIcons(types: EnemyType[]): void {
+  enemiesTotal = types.length;
   enemiesDestroyed = 0;
   if (!enemyIconsEl) return;
   enemyIconsEl.innerHTML = '';
-  for (let i = 0; i < count; i += 1) {
+  types.forEach(type => {
     const icon = document.createElement('div');
     icon.className = 'enemy-icon';
+    if (type === EnemyType.Interceptor) {
+      icon.classList.add('interceptor');
+    }
     enemyIconsEl.appendChild(icon);
-  }
+  });
 }
 
-function markEnemyDestroyed(): void {
+function markEnemyDestroyed(type: EnemyType): void {
   if (!enemyIconsEl || !enemiesTotal) return;
-  const icons = enemyIconsEl.querySelectorAll('.enemy-icon');
-  if (enemiesDestroyed < icons.length) {
-    icons[enemiesDestroyed].classList.add('down');
+  const selector =
+    type === EnemyType.Interceptor ? '.enemy-icon.interceptor:not(.down)' : '.enemy-icon:not(.interceptor):not(.down)';
+  const icon = enemyIconsEl.querySelector(selector) as HTMLElement | null;
+  if (icon) {
+    icon.classList.add('down');
+  } else {
+    const fallback = enemyIconsEl.querySelector('.enemy-icon:not(.down)') as HTMLElement | null;
+    fallback?.classList.add('down');
   }
   enemiesDestroyed = Math.min(enemiesDestroyed + 1, enemiesTotal);
 }
 
-function onEnemyDestroyed(): void {
-  markEnemyDestroyed();
+function onEnemyDestroyed(type: EnemyType): void {
+  markEnemyDestroyed(type);
   if (enemies.getCount() === 0 && !winPending && !player.isDestroyed()) {
     advanceWave();
   }
@@ -476,9 +506,9 @@ function bindToggles(): void {
   if (enemyExplosionBtn) {
     enemyExplosionBtn.addEventListener('click', () => {
       const before = enemies.getCount();
-      enemies.debugExplodeOne();
-      if (enemies.getCount() < before) {
-        onEnemyDestroyed();
+      const type = enemies.debugExplodeOne();
+      if (enemies.getCount() < before && type) {
+        onEnemyDestroyed(type);
       }
     });
   }
@@ -546,12 +576,12 @@ function handleVictory(): void {
   showResult('Zwyciestwo', false);
 }
 
-function scheduleNextWave(count: number): void {
+function scheduleNextWave(fighters: number, interceptors: number = 0): void {
   clearWinTimer();
   winTimer = window.setTimeout(async () => {
     player.fullyHeal();
-    await enemies.reset(count, player, destroyer ? destroyer.position : undefined);
-    resetEnemyIcons(enemies.getCount());
+    await enemies.reset(fighters, player, destroyer ? destroyer.position : undefined, interceptors);
+    resetEnemyIcons(enemies.getEnemyTypes());
     enemies.setActive(true);
     enemies.setFireEnabled(true);
   }, 10000);
@@ -560,19 +590,19 @@ function scheduleNextWave(count: number): void {
 async function advanceWave(): Promise<void> {
   if (wave === 1) {
     wave = 2;
-    scheduleNextWave(2);
+    scheduleNextWave(2); // 2 Fighters
   } else if (wave === 2) {
     wave = 3;
-    scheduleNextWave(3);
+    scheduleNextWave(3); // 3 Fighters
   } else if (wave === 3) {
     wave = 4;
-    scheduleNextWave(4);
+    scheduleNextWave(2, 1); // 2 Fighters + 1 Interceptor
   } else if (wave === 4) {
     wave = 5;
-    scheduleNextWave(6);
+    scheduleNextWave(3, 1); // 3 Fighters + 1 Interceptor
   } else if (wave === 5) {
     wave = 6;
-    scheduleNextWave(8);
+    scheduleNextWave(3, 2); // 3 Fighters + 2 Interceptors
   } else {
     handleVictory();
   }
@@ -698,7 +728,7 @@ function handleAsteroidBulletHits(): void {
   }
 }
 
-function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
+function handleAsteroidCollisions(onEnemyDestroyedCb: (type: EnemyType) => void): void {
   for (let i = asteroids.length - 1; i >= 0; i -= 1) {
     const ast = asteroids[i];
     const pos = ast.mesh.position;
@@ -717,9 +747,10 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: () => void): void {
     let collided = false;
     for (const root of enemyRoots) {
       if (pos.distanceTo(root.position) <= ast.radius + 8) {
-        if (enemies.destroyEnemyByRoot(root)) {
+        const destroyedType = enemies.destroyEnemyByRoot(root);
+        if (destroyedType) {
           explosions.trigger(pos, player.collisionRadius * 1.6, undefined, { scaleMultiplier: 1 / 3, intensity: 1 });
-          onEnemyDestroyedCb();
+          onEnemyDestroyedCb(destroyedType);
           removeAsteroid(i);
           collided = true;
           break;
@@ -782,6 +813,6 @@ async function restartGame(): Promise<void> {
   player.reset();
   wave = 1;
   await enemies.reset(1, player, destroyer ? destroyer.position : undefined);
-  resetEnemyIcons(enemies.getCount());
+  resetEnemyIcons(enemies.getEnemyTypes());
   startGame();
 }

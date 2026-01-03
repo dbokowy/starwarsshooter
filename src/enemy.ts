@@ -6,6 +6,8 @@ import { PlayerController } from './player.js';
 import { ExplosionManager } from './explosions.js';
 
 type EnemyShip = {
+  type: EnemyType;
+  archetype: EnemyArchetype;
   root: THREE.Object3D;
   velocity: THREE.Vector3;
   orbitAngle: number;
@@ -36,24 +38,74 @@ type LoadedModel = {
   size: THREE.Vector3;
 };
 
+export enum EnemyType {
+  Fighter = 'fighter',
+  Interceptor = 'interceptor'
+}
+
+type EnemyArchetype = {
+  modelPath: string;
+  muzzleOffsets: THREE.Vector3[];
+  bulletSpeed: number;
+  bulletLife: number;
+  fireDelayRange: [number, number];
+  health: number;
+  speedTarget: number;
+  maxSpeed: number;
+  maxAccel: number;
+  aimSpread: number;
+  wanderSpeedRange: [number, number];
+  collisionFailChance: number;
+  sizeTarget: number;
+};
+
 export class EnemySquadron {
   private readonly enemies: EnemyShip[] = [];
   private readonly bullets: Bullet[] = [];
-  private prefab: LoadedModel | null = null;
+  private prefabs: Partial<Record<EnemyType, LoadedModel>> = {};
+  private readonly archetypes: Record<EnemyType, EnemyArchetype> = {
+    [EnemyType.Fighter]: {
+      modelPath: 'star_wars_tieln_fighter/scene.gltf',
+      muzzleOffsets: [new THREE.Vector3(1.8, -0.2, -2.6), new THREE.Vector3(-1.8, -0.2, -2.6)],
+      bulletSpeed: 260,
+      bulletLife: 4,
+      fireDelayRange: [800, 1350],
+      health: 3,
+      speedTarget: 170,
+      maxSpeed: 230,
+      maxAccel: 130,
+      aimSpread: 0.18,
+      wanderSpeedRange: [0.6, 1.4],
+      collisionFailChance: 0.08,
+      sizeTarget: 12
+    },
+    [EnemyType.Interceptor]: {
+      modelPath: 'star_wars_tiein_interceptor/scene.gltf',
+      muzzleOffsets: [
+        new THREE.Vector3(1.6, 0.2, -2.4),
+        new THREE.Vector3(-1.6, 0.2, -2.4),
+        new THREE.Vector3(1.6, -0.3, -2.4),
+        new THREE.Vector3(-1.6, -0.3, -2.4)
+      ],
+      bulletSpeed: 270,
+      bulletLife: 4,
+      fireDelayRange: [700, 1200],
+      health: 3,
+      speedTarget: 170 * 1.2,
+      maxSpeed: 230 * 1.2,
+      maxAccel: 130 * 1.2,
+      aimSpread: 0.14,
+      wanderSpeedRange: [0.9, 1.6],
+      collisionFailChance: 0.04,
+      sizeTarget: 12
+    }
+  };
   private fireEnabled = true;
-  private readonly muzzleOffsets = [new THREE.Vector3(1.8, -0.2, -2.6), new THREE.Vector3(-1.8, -0.2, -2.6)];
-  private readonly bulletSpeed = 260;
-  private readonly bulletLife = 4;
-  private readonly healthPerEnemy = 3; // each hit from X-wing removes 1/3
   private readonly avoidanceRadius = 22;
   private readonly obstacleBuffer = 30;
   private readonly healthBarWidth = 7.2; // 50% longer than before
   private readonly hitboxMultiplier: number; // extra radius: 60% mobile, 30% desktop
   private enemyHitFlashTexture?: THREE.Texture;
-  private readonly speedTarget = 170;
-  private readonly maxSpeed = 230;
-  private readonly maxAccel = 130;
-  private readonly aimSpread = 0.18; // tighter for hits; explicit miss logic decides off-target shots
   private readonly approachDuration = 10; // seconds to fly in from destroyer
   private active = false;
   private enemyFireSound?: AudioBuffer;
@@ -74,9 +126,10 @@ export class EnemySquadron {
     this.enemyFireSound = fireSound;
   }
 
-  async init(count: number, player: PlayerController, formationOrigin?: THREE.Vector3): Promise<void> {
-    this.prefab = await this.loadPrefab();
-    const baseRadius = Math.max(this.prefab.size.x, this.prefab.size.y, this.prefab.size.z) * 0.6;
+  async init(count: number, player: PlayerController, formationOrigin?: THREE.Vector3, interceptors: number = 0): Promise<void> {
+    await this.ensurePrefabs();
+    const spawnTypes = this.buildSpawnList(count, interceptors);
+    const total = spawnTypes.length;
 
     const origin = formationOrigin ? formationOrigin.clone() : player.root.position.clone().add(new THREE.Vector3(0, 0, 400));
     const formationOffsets = [
@@ -87,14 +140,20 @@ export class EnemySquadron {
       new THREE.Vector3(-22, 0, -22)
     ];
 
-    for (let i = 0; i < count; i += 1) {
+    for (let i = 0; i < total; i += 1) {
+      const type = spawnTypes[i] ?? EnemyType.Fighter;
+      const archetype = this.archetypes[type];
+      const prefab = this.prefabs[type]!;
+      const baseRadius = Math.max(prefab.size.x, prefab.size.y, prefab.size.z) * 0.6;
+
       const root = new THREE.Object3D();
-      const model = clone(this.prefab.scene);
+      const model = clone(prefab.scene);
+      model.rotateY(Math.PI); // face forward along -Z like fighters
       root.add(model);
       const hitFlash = this.createHitFlash();
       root.add(hitFlash);
 
-      const angle = (i / count) * Math.PI * 2;
+      const angle = (i / Math.max(1, total)) * Math.PI * 2;
       const radius = 130 + Math.random() * 50;
       const formationOffset = formationOffsets[i % formationOffsets.length].clone();
 
@@ -115,19 +174,21 @@ export class EnemySquadron {
 
       this.scene.add(root);
       this.enemies.push({
+        type,
+        archetype,
         root,
         velocity: new THREE.Vector3(),
         orbitAngle: angle,
         radiusOffset: THREE.MathUtils.randFloatSpread(24),
         wanderPhase: Math.random() * Math.PI * 2,
-        wanderSpeed: 0.6 + Math.random() * 0.8,
+        wanderSpeed: THREE.MathUtils.randFloat(archetype.wanderSpeedRange[0], archetype.wanderSpeedRange[1]),
         formationOffset,
         approachProgress: 0,
         approachStart: startPos,
         approachTarget: targetPos,
-        health: this.healthPerEnemy,
+        health: archetype.health,
         lastShot: performance.now() - Math.random() * 600,
-        fireDelay: 900 + Math.random() * 400,
+        fireDelay: THREE.MathUtils.randFloat(archetype.fireDelayRange[0], archetype.fireDelayRange[1]),
         healthBar,
         boundingRadius: baseRadius,
         hitFlash,
@@ -136,7 +197,7 @@ export class EnemySquadron {
     }
   }
 
-  async reset(count: number, player: PlayerController, formationOrigin?: THREE.Vector3): Promise<void> {
+  async reset(count: number, player: PlayerController, formationOrigin?: THREE.Vector3, interceptors: number = 0): Promise<void> {
     // remove existing enemies
     this.enemies.forEach(e => {
       this.scene.remove(e.root);
@@ -148,7 +209,7 @@ export class EnemySquadron {
     }
     this.bullets.length = 0;
     this.active = false;
-    await this.init(count, player, formationOrigin);
+    await this.init(count, player, formationOrigin, interceptors);
   }
 
   update(
@@ -158,9 +219,9 @@ export class EnemySquadron {
     obstacles: Obstacle[],
     now: number,
     onPlayerHit: () => void,
-    onEnemyDestroyed: () => void
+    onEnemyDestroyed: (type: EnemyType) => void
   ): void {
-    if (!this.prefab || !this.active) return;
+    if (!this.active) return;
     const playerPos = player.root.position;
 
     for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
@@ -209,7 +270,7 @@ export class EnemySquadron {
 
     const desiredPos = baseTarget.add(wander);
 
-    const desiredVel = desiredPos.sub(enemy.root.position).normalize().multiplyScalar(this.speedTarget);
+    const desiredVel = desiredPos.sub(enemy.root.position).normalize().multiplyScalar(enemy.archetype.speedTarget);
 
     const avoidance = new THREE.Vector3();
     let asteroidPush = 0;
@@ -233,14 +294,14 @@ export class EnemySquadron {
       }
     });
 
-    if (asteroidPush > 0 && Math.random() < 0.08) {
+    if (asteroidPush > 0 && Math.random() < enemy.archetype.collisionFailChance) {
       avoidance.multiplyScalar(0.35); // occasional intentional failure to dodge
     }
 
     const steer = desiredVel.add(avoidance).sub(enemy.velocity);
-    steer.clampLength(0, this.maxAccel * delta);
+    steer.clampLength(0, enemy.archetype.maxAccel * delta);
     enemy.velocity.add(steer);
-    enemy.velocity.clampLength(0, this.maxSpeed);
+    enemy.velocity.clampLength(0, enemy.archetype.maxSpeed);
 
     enemy.root.position.addScaledVector(enemy.velocity, delta);
   }
@@ -264,7 +325,7 @@ export class EnemySquadron {
     if (aimDot < 0.78) return; // only fire when mostly facing the player
 
     enemy.lastShot = now;
-    enemy.fireDelay = 800 + Math.random() * 550;
+    enemy.fireDelay = THREE.MathUtils.randFloat(enemy.archetype.fireDelayRange[0], enemy.archetype.fireDelayRange[1]);
     this.spawnLaser(enemy, forward, playerPos);
   }
 
@@ -272,11 +333,16 @@ export class EnemySquadron {
     this.fireEnabled = enabled;
   }
 
-  debugExplodeOne(): void {
-    if (!this.enemies.length) return;
+  setActive(active: boolean): void {
+    this.active = active;
+  }
+
+  debugExplodeOne(): EnemyType | null {
+    if (!this.enemies.length) return null;
     const enemy = this.enemies[0];
     this.destroyEnemy(enemy);
     this.enemies.splice(0, 1);
+    return enemy.type;
   }
 
   private spawnLaser(enemy: EnemyShip, forward: THREE.Vector3, playerPos: THREE.Vector3): void {
@@ -297,7 +363,7 @@ export class EnemySquadron {
       depthWrite: false
     });
 
-    this.muzzleOffsets.forEach(offset => {
+    enemy.archetype.muzzleOffsets.forEach(offset => {
       const laser = new THREE.Group();
       const core = new THREE.Mesh(coreGeometry, coreMaterial);
       const glow = new THREE.Mesh(glowGeometry, glowMaterial);
@@ -318,18 +384,18 @@ export class EnemySquadron {
         // slight aim jitter so shots feel less perfect even when intended to hit
         targetPos.add(
           new THREE.Vector3(
-            THREE.MathUtils.randFloatSpread(this.aimSpread),
-            THREE.MathUtils.randFloatSpread(this.aimSpread),
-            THREE.MathUtils.randFloatSpread(this.aimSpread)
+            THREE.MathUtils.randFloatSpread(enemy.archetype.aimSpread),
+            THREE.MathUtils.randFloatSpread(enemy.archetype.aimSpread),
+            THREE.MathUtils.randFloatSpread(enemy.archetype.aimSpread)
           )
         );
       }
 
       const aimDir = targetPos.sub(laser.position).normalize();
       laser.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), aimDir); // align beam to travel direction
-      const velocity = aimDir.multiplyScalar(this.bulletSpeed);
+      const velocity = aimDir.multiplyScalar(enemy.archetype.bulletSpeed);
 
-      this.bullets.push({ mesh: laser, velocity, life: this.bulletLife });
+      this.bullets.push({ mesh: laser, velocity, life: enemy.archetype.bulletLife });
       this.scene.add(laser);
 
       if (this.enemyFireSound && this.listener) {
@@ -338,6 +404,7 @@ export class EnemySquadron {
         const distance = enemy.root.position.distanceTo(targetPos);
         const volume = THREE.MathUtils.clamp(0.7 - distance / 500, 0.08, 0.7);
         snd.setVolume(volume);
+        snd.setPlaybackRate(0.9 + Math.random() * 0.2);
         snd.play();
       }
     });
@@ -358,13 +425,8 @@ export class EnemySquadron {
   private handleEnemyHitsPlayer(player: PlayerController, onPlayerHit: () => void): void {
     for (let i = this.bullets.length - 1; i >= 0; i -= 1) {
       const bullet = this.bullets[i];
-      const distSq = bullet.mesh.position.distanceToSquared(player.root.position);
-      const hitRadius = Math.pow(player.collisionRadius + 0.8, 2);
-      if (distSq <= hitRadius) {
-        if (player.isRolling() && Math.random() < 0.7) {
-          // during barrel roll let most hits pass through
-          continue;
-        }
+      const hitRadius = player.collisionRadius + 2.0;
+      if (bullet.mesh.position.distanceTo(player.root.position) <= hitRadius) {
         this.scene.remove(bullet.mesh);
         this.bullets.splice(i, 1);
         onPlayerHit();
@@ -372,7 +434,7 @@ export class EnemySquadron {
     }
   }
 
-  private handlePlayerHitsEnemies(player: PlayerController, onEnemyDestroyed: () => void): void {
+  private handlePlayerHitsEnemies(player: PlayerController, onEnemyDestroyed: (type: EnemyType) => void): void {
     for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
       const enemy = this.enemies[i];
       for (let j = player.bullets.length - 1; j >= 0; j -= 1) {
@@ -386,11 +448,11 @@ export class EnemySquadron {
           enemy.health -= 1;
           this.updateHealthFill(enemy);
           enemy.hitFlashTimer = 0.4;
-        if (enemy.health <= 0) {
-          this.destroyEnemy(enemy);
-          this.enemies.splice(i, 1);
-          onEnemyDestroyed();
-        }
+          if (enemy.health <= 0) {
+            this.destroyEnemy(enemy);
+            this.enemies.splice(i, 1);
+            onEnemyDestroyed(enemy.type);
+          }
           break;
         }
       }
@@ -410,7 +472,7 @@ export class EnemySquadron {
   }
 
   private updateHealthFill(enemy: EnemyShip): void {
-    const pct = THREE.MathUtils.clamp(enemy.health / this.healthPerEnemy, 0, 1);
+    const pct = THREE.MathUtils.clamp(enemy.health / enemy.archetype.health, 0, 1);
     enemy.healthBar.fill.scale.x = pct;
     enemy.healthBar.fill.position.x = -((1 - pct) * this.healthBarWidth) / 2;
   }
@@ -493,32 +555,62 @@ export class EnemySquadron {
     return this.enemyHitFlashTexture;
   }
 
-  private async loadPrefab(): Promise<LoadedModel> {
-    const model = await this.loadModel(`${this.assetsPath}/star_wars_tieln_fighter/scene.gltf`);
+  private async ensurePrefabs(): Promise<void> {
+    await Promise.all(
+      (Object.values(EnemyType) as EnemyType[]).map(async type => {
+        if (!this.prefabs[type]) {
+          this.prefabs[type] = await this.loadPrefabForType(type);
+        }
+      })
+    );
+  }
+
+  private buildSpawnList(fighters: number, interceptors: number): EnemyType[] {
+    const list: EnemyType[] = [];
+    for (let i = 0; i < fighters; i += 1) list.push(EnemyType.Fighter);
+    for (let i = 0; i < interceptors; i += 1) list.push(EnemyType.Interceptor);
+    return list;
+  }
+
+  private async loadPrefabForType(type: EnemyType): Promise<LoadedModel> {
+    const archetype = this.archetypes[type];
+    const model = await this.loadModel(`${this.assetsPath}/${archetype.modelPath}`);
     const size = new THREE.Vector3();
     new THREE.Box3().setFromObject(model.scene).getSize(size);
 
-    const targetSize = 12;
     const maxDim = Math.max(size.x, size.y, size.z);
-    const scale = maxDim > 0 ? targetSize / maxDim : 1;
+    const scale = maxDim > 0 ? archetype.sizeTarget / maxDim : 1;
     model.scene.scale.setScalar(scale);
-    this.brightenModel(model.scene);
+    this.brightenModel(model.scene, type);
 
     const scaledSize = size.multiplyScalar(scale);
     return { scene: model.scene, animations: model.animations, size: scaledSize };
   }
 
-  private brightenModel(root: THREE.Object3D): void {
+  private brightenModel(root: THREE.Object3D, type: EnemyType): void {
     root.traverse(obj => {
       if ('material' in obj && obj.material) {
         const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
         materials.forEach(mat => {
-          if ('color' in mat && mat.color) {
-            mat.color.multiplyScalar(0.7); // darken enemy hulls ~30%
+          if (type === EnemyType.Interceptor) {
+            if ('color' in mat && mat.color) {
+              mat.color.setRGB(0.38, 0.38, 0.38); // lighter dark grey
+            }
+            if ('emissive' in mat) {
+              mat.emissive?.setHex(0x222222);
+              mat.emissiveIntensity = 0.22;
+            }
+          } else {
+            if ('color' in mat && mat.color) {
+              mat.color.multiplyScalar(0.7); // darken enemy hulls ~30%
+            }
+            if ('emissive' in mat) {
+              mat.emissive?.copy((mat.color ?? new THREE.Color(0xffffff)).clone().multiplyScalar(0.6));
+              mat.emissiveIntensity = 0.6;
+            }
           }
-          if ('emissive' in mat) {
-            mat.emissive?.copy((mat.color ?? new THREE.Color(0xffffff)).clone().multiplyScalar(0.6));
-            mat.emissiveIntensity = 0.6;
+          if ('needsUpdate' in mat) {
+            (mat as THREE.Material).needsUpdate = true;
           }
         });
       }
@@ -544,10 +636,6 @@ export class EnemySquadron {
     });
   }
 
-  setActive(active: boolean): void {
-    this.active = active;
-  }
-
   getCount(): number {
     return this.enemies.length;
   }
@@ -556,12 +644,16 @@ export class EnemySquadron {
     return this.enemies.map(e => e.root);
   }
 
-  destroyEnemyByRoot(root: THREE.Object3D): boolean {
+  getEnemyTypes(): EnemyType[] {
+    return this.enemies.map(e => e.type);
+  }
+
+  destroyEnemyByRoot(root: THREE.Object3D): EnemyType | null {
     const idx = this.enemies.findIndex(e => e.root === root);
-    if (idx === -1) return false;
+    if (idx === -1) return null;
     const enemy = this.enemies[idx];
     this.destroyEnemy(enemy);
     this.enemies.splice(idx, 1);
-    return true;
+    return enemy.type;
   }
 }
