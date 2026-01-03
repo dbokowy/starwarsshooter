@@ -21,7 +21,7 @@ export class EngineFlames {
     });
 
     this.glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff4a1f,
+      color: 0xfc6592,
       transparent: true,
       opacity: 0.12,
       blending: THREE.AdditiveBlending,
