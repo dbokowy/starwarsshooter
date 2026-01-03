@@ -12,18 +12,18 @@ export class EngineFlames {
   constructor(parent: THREE.Object3D, private readonly offsets: THREE.Vector3[]) {
     this.parent = parent;
     this.coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0xfff2cc,
+      color: 0xe6f7ff, // brighter light blue inner core
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.6,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide
     });
 
     this.glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff7547,
+      color: 0xff4a1f,
       transparent: true,
-      opacity: 0.22, // softer glow
+      opacity: 0.12,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide
@@ -61,6 +61,9 @@ export class EngineFlames {
       const sparks = this.createSparks();
       flame.userData.sparks = sparks;
 
+      glow.renderOrder = 10;
+      core.renderOrder = 11;
+
       flame.add(glow);
       flame.add(core);
       flame.add(sparks);
@@ -95,9 +98,9 @@ export class EngineFlames {
       const verticalInfluence = (offset.y >= 0 ? -1 : 1) * vertStrength; // up -> top shrink, bottom grow
       const verticalScale = THREE.MathUtils.clamp(1 + verticalInfluence * 0.9, 0.7, 1.85); // softer top shrink, still visible bottom effect
       const rollScale = 1 + rollStrength * 0.8;
-      const lengthScale = THREE.MathUtils.lerp(1.1, 6.8, flare) * flicker * leanScale * verticalScale * rollScale;
+      const lengthScale = THREE.MathUtils.lerp(0.2646, 6.8, flare) * flicker * leanScale * verticalScale * rollScale; // further ~30% shorter at idle
       const radiusScaleBias = THREE.MathUtils.clamp(1 + verticalInfluence * 0.45 + rollStrength * 0.25, 0.85, 1.45);
-      const radiusScale = THREE.MathUtils.lerp(0.65, 1.6, flare) * flicker;
+      const radiusScale = THREE.MathUtils.lerp(0.1568, 1.6, flare) * flicker; // thinner at idle
       flame.scale.set(
         flame.userData.baseRadius * radiusScale * radiusScaleBias,
         flame.userData.baseLength * lengthScale,
@@ -112,11 +115,14 @@ export class EngineFlames {
       flame.children.forEach(child => {
         if (child instanceof THREE.Mesh && child.material && 'opacity' in child.material) {
           const material = child.material as THREE.Material & { opacity: number };
-          material.opacity = THREE.MathUtils.lerp(material.opacity, targetOpacity, 0.2);
+          const isGlow = child === flame.children[0];
+          const isCore = child === flame.children[1];
+          const boostedOpacity = isCore ? targetOpacity * 1.4 : targetOpacity;
+          material.opacity = THREE.MathUtils.lerp(material.opacity, Math.min(1, boostedOpacity), 0.2);
 
           const boostHeat = THREE.MathUtils.clamp((boostNorm - 0.8) / 0.2, 0, 1);
           const baseColor = (child.userData.baseColor as THREE.Color) ?? material.color.clone();
-          const hotColor = child === flame.children[0] ? new THREE.Color(0xff5a3c) : new THREE.Color(0xff2a1a);
+          const hotColor = isCore ? new THREE.Color(0x0bc2ff) : new THREE.Color(0xff1500);
           material.color.lerpColors(baseColor, hotColor, boostHeat);
         }
       });
@@ -135,9 +141,9 @@ export class EngineFlames {
         }
         attr.needsUpdate = true;
         const sm = sparks.material as THREE.PointsMaterial;
-        const sparkOpacity = THREE.MathUtils.clamp(THREE.MathUtils.lerp(0.1, 0.35, flare) * (1 + Math.sin(time * 9 + idx)), 0, 0.5);
+        const sparkOpacity = THREE.MathUtils.clamp(THREE.MathUtils.lerp(0.18, 0.48, flare) * (1 + Math.sin(time * 9 + idx)), 0, 0.8);
         sm.opacity = sparkOpacity;
-        sm.size = THREE.MathUtils.lerp(0.18, 0.34, flare);
+        sm.size = THREE.MathUtils.lerp(0.2, 0.42, flare);
         sparks.scale.setScalar(1 + Math.abs(leanStrength) * 0.1);
         sparks.scale.z *= 1 + (-sideSign * leanStrength) * 0.12;
       }
@@ -162,7 +168,7 @@ export class EngineFlames {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const material = new THREE.PointsMaterial({
       map: getFlameParticleTexture(),
-      color: 0xfff7d2,
+      color: 0xbbe5ff,
       size: 0.28,
       sizeAttenuation: true,
       transparent: true,
@@ -190,9 +196,9 @@ function getFlameParticleTexture(): THREE.Texture {
   if (ctx) {
     const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
     grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    grad.addColorStop(0.25, 'rgba(255, 220, 170, 0.9)');
-    grad.addColorStop(0.6, 'rgba(255, 140, 70, 0.35)');
-    grad.addColorStop(1, 'rgba(255, 100, 40, 0)');
+    grad.addColorStop(0.25, 'rgba(150, 220, 255, 0.9)');
+    grad.addColorStop(0.6, 'rgba(90, 180, 255, 0.38)');
+    grad.addColorStop(1, 'rgba(40, 120, 220, 0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
   }
