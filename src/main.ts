@@ -65,7 +65,8 @@ const loadingTipEl = document.querySelector('.loading-tip') as HTMLElement | nul
 const LOADING_TIPS = [
   'Przy dużej liczbie wrogów dobrze jest schować się w pasie asteroidów',
   'Podczas manewru beczki masz 70% mniej szans na trafienie',
-  'Statki wroga typu TIE Interceptor sa szybsze i zwrotniejsze od myśliwców TIE Fighter'
+  'Statki wroga typu TIE Interceptor sa szybsze i zwrotniejsze od myśliwców TIE Fighter',
+  'Boost przyspieszenia powyżej 70% zwiększa dwukrotnie prędkość X-winga i ma 10 sekundowy cooldown'
 ];
 const MIN_LOADING_MS = 4000;
 let loadingShownAt = performance.now();
@@ -146,6 +147,7 @@ async function init() {
     enemies.setAudio(listener, buffer);
   });
   audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => player.setHitSound(buffer));
+  audioLoader.load(`${ASSETS_PATH}/xwing_boost.mp3`, buffer => player.setBoostSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/explosion-fx-2.mp3`, buffer => explosions.setSoundBuffer(buffer));
   await explosions.init();
   loadBackgroundMusic();
@@ -739,6 +741,11 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: (type: EnemyType) => void)
       player.destroy();
       handlePlayerDestroyed(true);
       removeAsteroid(i);
+      gameStarted = false;
+      if (resultModal) resultModal.classList.remove('hidden');
+      if (resultMessage) resultMessage.textContent = 'Przegrana';
+      enemies.setActive(false);
+      enemies.setFireEnabled(false);
       continue;
     }
 

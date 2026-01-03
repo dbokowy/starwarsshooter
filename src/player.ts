@@ -38,8 +38,13 @@ export class PlayerController {
   private readonly rollDuration = 0.55;
   private rollDir = 1;
   private rollLatch = false;
-  private readonly rollCooldownMs = 0;
+  private readonly rollCooldownMs = 1000;
   private lastRollTimestamp = -Infinity;
+  private boostSound?: AudioBuffer;
+  private boostSource: THREE.Audio | null = null;
+  private boostActive = false;
+  private boostPressedLast = false;
+  private boostPlayedThisHold = false;
   private hitFlash?: THREE.Mesh;
   private hitFlashTimer = 0;
   private readonly hitFlashDuration = 0.35;
@@ -74,8 +79,42 @@ export class PlayerController {
     this.fireBuffer = buffer;
   }
 
+  private handleBoostAudio(input: InputState): void {
+    const boostFraction = this.currentSpeed / (this.config.baseSpeed * this.config.boostMultiplier);
+    const aboveThreshold = boostFraction >= 0.7;
+
+    if (!input.boost || !aboveThreshold) {
+      if (this.boostSource) {
+        this.boostSource.stop();
+        this.boostSource = null;
+      }
+      this.boostPlayedThisHold = false;
+      return;
+    }
+
+    if (!this.boostPlayedThisHold && this.boostSound) {
+      const audio = new THREE.Audio(this.listener);
+      audio.setBuffer(this.boostSound);
+      audio.setVolume(0.5);
+      audio.setPlaybackRate(1.0);
+      const offset = Math.min(1.0, Math.max(0, this.boostSound.duration - 0.1));
+      audio.play(0, offset);
+      this.boostSource = audio;
+      this.boostPlayedThisHold = true;
+      audio.source?.addEventListener('ended', () => {
+        if (this.boostSource === audio) {
+          this.boostSource = null;
+        }
+      });
+    }
+  }
+
   setHitSound(buffer: AudioBuffer): void {
     this.hitSoundBuffer = buffer;
+  }
+
+  setBoostSound(buffer: AudioBuffer): void {
+    this.boostSound = buffer;
   }
 
   fullyHeal(): void {
@@ -101,6 +140,7 @@ export class PlayerController {
     if (!this.model || this.destroyed) return;
 
     this.updateSpeed(delta, input);
+    this.handleBoostAudio(input);
     this.handleRollInput(input);
     this.updateTransform(delta, input);
     this.clampToPlayArea();
