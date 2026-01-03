@@ -7,6 +7,7 @@ type ExplosionInstance = {
   mixer?: THREE.AnimationMixer;
   shockwave?: THREE.Sprite;
   particle?: THREE.Points;
+  coreSphere?: THREE.Mesh;
   intensity: number;
   timeLeft: number;
   totalTime: number;
@@ -128,6 +129,23 @@ export class ExplosionManager {
       container.add(particle);
     }
 
+    const coreSphere =
+      (() => {
+        const geo = new THREE.SphereGeometry(1.12, 12, 12); // 30% smaller core
+        const mat = new THREE.MeshBasicMaterial({
+          color: 0xfff2d0,
+          transparent: true,
+          opacity: 0.95 * intensity,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          depthTest: true
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.renderOrder = 32;
+        container.add(mesh);
+        return mesh;
+      })();
+
     const mixer = animations.length ? new THREE.AnimationMixer(explosion) : undefined;
     if (mixer) {
       animations.forEach(clip => {
@@ -196,6 +214,14 @@ export class ExplosionManager {
         pm.size = THREE.MathUtils.lerp(6, 12, intensity);
       }
 
+      if (entry.coreSphere) {
+        const mat = entry.coreSphere.material as THREE.MeshBasicMaterial;
+        const coreT = THREE.MathUtils.clamp(t / 0.8, 0, 1);
+        mat.opacity = THREE.MathUtils.lerp(0.95 * entry.intensity, 0, coreT);
+        const baseCore = entry.startScale * 0.9;
+        entry.coreSphere.scale.setScalar(THREE.MathUtils.lerp(baseCore, baseCore * 0.2, coreT));
+      }
+
       if (entry.timeLeft <= 0) {
         if (entry.particle) {
           entry.particle.geometry.dispose();
@@ -203,6 +229,10 @@ export class ExplosionManager {
         }
         if (entry.shockwave) {
           entry.shockwave.material.dispose();
+        }
+        if (entry.coreSphere) {
+          entry.coreSphere.geometry.dispose();
+          entry.coreSphere.material.dispose();
         }
         this.scene.remove(entry.container);
         this.active.splice(i, 1);
