@@ -148,6 +148,7 @@ async function init() {
   });
   audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => player.setHitSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/xwing_boost.mp3`, buffer => player.setBoostSound(buffer));
+  audioLoader.load(`${ASSETS_PATH}/xwing_pass.mp3`, buffer => player.setRollSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/explosion-fx-2.mp3`, buffer => explosions.setSoundBuffer(buffer));
   await explosions.init();
   loadBackgroundMusic();

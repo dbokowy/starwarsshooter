@@ -39,9 +39,12 @@ export class PlayerController {
   private rollDir = 1;
   private rollLatch = false;
   private readonly rollCooldownMs = 1000;
+  private rollSound: AudioBuffer | null = null;
+  private rollAudio: THREE.Audio | null = null;
   private lastRollTimestamp = -Infinity;
   private boostSound?: AudioBuffer;
   private boostSource: THREE.Audio | null = null;
+  private boostAudio: THREE.Audio | null = null;
   private boostActive = false;
   private boostPressedLast = false;
   private boostPlayedThisHold = false;
@@ -92,17 +95,20 @@ export class PlayerController {
       return;
     }
 
-    if (!this.boostPlayedThisHold && this.boostSound) {
-      const audio = new THREE.Audio(this.listener);
-      audio.setBuffer(this.boostSound);
-      audio.setVolume(0.5);
-      audio.setPlaybackRate(1.0);
-      const offset = Math.min(1.0, Math.max(0, this.boostSound.duration - 0.1));
-      audio.play(0, offset);
-      this.boostSource = audio;
+    if (!this.boostPlayedThisHold && this.boostSound && this.boostAudio) {
+      this.boostAudio.setVolume(0.5);
+      this.boostAudio.setPlaybackRate(1.0);
+      const offset = Math.min(this.boostSound.duration, 1.0); // play from 1s mark
+      try {
+        this.boostAudio.stop();
+      } catch {
+        /* ignore */
+      }
+      this.boostAudio.play(0, offset);
+      this.boostSource = this.boostAudio;
       this.boostPlayedThisHold = true;
-      audio.source?.addEventListener('ended', () => {
-        if (this.boostSource === audio) {
+      this.boostAudio.source?.addEventListener('ended', () => {
+        if (this.boostSource === this.boostAudio) {
           this.boostSource = null;
         }
       });
@@ -115,6 +121,13 @@ export class PlayerController {
 
   setBoostSound(buffer: AudioBuffer): void {
     this.boostSound = buffer;
+    this.boostAudio = new THREE.Audio(this.listener);
+    this.boostAudio.setBuffer(buffer);
+  }
+  setRollSound(buffer: AudioBuffer): void {
+    this.rollSound = buffer;
+    this.rollAudio = new THREE.Audio(this.listener);
+    this.rollAudio.setBuffer(buffer);
   }
 
   fullyHeal(): void {
@@ -315,6 +328,18 @@ export class PlayerController {
     this.rollDir = direction;
     this.rollTime = 0;
     document.body.classList.add('roll-blur');
+
+    if (this.rollSound && this.rollAudio) {
+      this.rollAudio.setVolume(0.55);
+      this.rollAudio.setPlaybackRate(2.0);
+      const offset = Math.min(this.rollSound.duration, 2.0); // start at 2s into clip
+      try {
+        this.rollAudio.stop();
+      } catch {
+        /* ignore */
+      }
+      this.rollAudio.play(0, offset); // fire immediately on key press
+    }
   }
 
   private getRollBend(): number {
