@@ -42,6 +42,54 @@ canvas {
   filter: drop-shadow(0 0 8px rgba(11, 216, 255, 0.7));
 }
 
+.enemy-icons {
+  position: fixed;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px;
+  background: rgba(6, 12, 22, 0.42);
+  border: 1px solid rgba(94, 203, 255, 0.35);
+  border-left: 3px solid #7ecfff;
+  border-radius: 12px;
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  z-index: 12;
+  pointer-events: none;
+}
+
+.enemy-icons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.enemy-icon {
+  width: 53px;
+  height: 36px;
+  background-color: var(--shield-accent);
+  mask-image: url('/assets/tie-fighter-lineart.svg');
+  -webkit-mask-image: url('/assets/tie-fighter-lineart.svg');
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-position: center;
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  filter: drop-shadow(0 0 10px rgba(94, 203, 255, 0.6));
+  transition: background-color 0.35s ease, opacity 0.35s ease, filter 0.35s ease;
+}
+
+.enemy-icon.down {
+  background-color: #16304f;
+  opacity: 0.35;
+  filter: drop-shadow(0 0 4px rgba(22, 48, 79, 0.6));
+}
+
 #hud {
   position: fixed;
   bottom: 24px;
@@ -699,6 +747,25 @@ body.is-touch #hud {
   top: 12px;
   bottom: auto;
   gap: 8px;
+}
+
+body.is-touch .enemy-icons {
+  top: 12px;
+  left: 10px;
+  transform: none;
+  flex-direction: row;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+body.is-touch .enemy-icons-list {
+  flex-direction: row;
+  gap: 6px;
+}
+
+body.is-touch .enemy-icon {
+  width: 43px;
+  height: 29px;
 }
 
 body.is-touch #hud .bar {

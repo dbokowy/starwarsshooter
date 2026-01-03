@@ -50,6 +50,7 @@ const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
 const prevPlayerPos = new THREE.Vector3();
 const playerDrift = new THREE.Vector3();
 
+const enemyIconsEl = document.getElementById('enemy-icons-list') as HTMLElement | null;
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
   speedBar: document.getElementById('speed-bar')
@@ -91,6 +92,8 @@ let gameStarted = false;
 let winPending = false;
 let winTimer: number | null = null;
 let wave = 1;
+let enemiesTotal = 0;
+let enemiesDestroyed = 0;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
@@ -138,6 +141,7 @@ async function init() {
     new THREE.Vector3(0, -2, 0)
   );
   await enemies.init(1, player, destroyer ? destroyer.position : undefined);
+  resetEnemyIcons(enemies.getCount());
   hideLoading();
   prevPlayerPos.copy(player.root.position);
 
@@ -385,7 +389,29 @@ function buildObstacles(): Obstacle[] {
   return list;
 }
 
+function resetEnemyIcons(count: number): void {
+  enemiesTotal = count;
+  enemiesDestroyed = 0;
+  if (!enemyIconsEl) return;
+  enemyIconsEl.innerHTML = '';
+  for (let i = 0; i < count; i += 1) {
+    const icon = document.createElement('div');
+    icon.className = 'enemy-icon';
+    enemyIconsEl.appendChild(icon);
+  }
+}
+
+function markEnemyDestroyed(): void {
+  if (!enemyIconsEl || !enemiesTotal) return;
+  const icons = enemyIconsEl.querySelectorAll('.enemy-icon');
+  if (enemiesDestroyed < icons.length) {
+    icons[enemiesDestroyed].classList.add('down');
+  }
+  enemiesDestroyed = Math.min(enemiesDestroyed + 1, enemiesTotal);
+}
+
 function onEnemyDestroyed(): void {
+  markEnemyDestroyed();
   if (enemies.getCount() === 0 && !winPending && !player.isDestroyed()) {
     advanceWave();
   }
@@ -443,7 +469,11 @@ function bindToggles(): void {
 
   if (enemyExplosionBtn) {
     enemyExplosionBtn.addEventListener('click', () => {
+      const before = enemies.getCount();
       enemies.debugExplodeOne();
+      if (enemies.getCount() < before) {
+        onEnemyDestroyed();
+      }
     });
   }
 
@@ -515,6 +545,7 @@ function scheduleNextWave(count: number): void {
   winTimer = window.setTimeout(async () => {
     player.fullyHeal();
     await enemies.reset(count, player, destroyer ? destroyer.position : undefined);
+    resetEnemyIcons(enemies.getCount());
     enemies.setActive(true);
     enemies.setFireEnabled(true);
   }, 10000);
@@ -745,5 +776,6 @@ async function restartGame(): Promise<void> {
   player.reset();
   wave = 1;
   await enemies.reset(1, player, destroyer ? destroyer.position : undefined);
+  resetEnemyIcons(enemies.getCount());
   startGame();
 }
