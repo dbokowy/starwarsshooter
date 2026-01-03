@@ -20,7 +20,7 @@ export const PLAY_AREA: PlayArea = {
 export const PLAYER_CONFIG: PlayerConfig = {
   baseSpeed: 4.6,
   strafeSpeed: 18,
-  boostMultiplier: 10,
+  boostMultiplier: 14.2857142857, // raw boost; 70%≈10x, ramps to ~20x top speed
   maxHealth: 100,
   muzzleOffsets: [
     new THREE.Vector3(6.6, 1.4, -3.2),   // upper right wingtip

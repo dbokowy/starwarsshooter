@@ -426,7 +426,7 @@ export class PlayerController {
 
   private updateSpeed(delta: number, input: InputState): void {
     const now = performance.now();
-    const maxBoost = this.config.boostMultiplier; // 10x at full boost
+    const maxBoost = this.config.boostMultiplier; // ~10x at 70%, ~20x after ramp
     const regularBoost = 2; // baseline boost gives ~2x speed
 
     let boostFactor = 1;
@@ -457,12 +457,14 @@ export class PlayerController {
   }
 
   private applyLateBoostRamp(boostFactor: number, maxBoost: number): number {
-    // Last 30% of boost curve doubles the current boost for a final surge
-    const boostFraction = boostFactor > 1 ? (boostFactor - 1) / Math.max(1e-6, maxBoost - 1) : 0;
-    if (boostFraction >= 0.7) {
-      return boostFactor * 2;
-    }
-    return boostFactor;
+    if (boostFactor <= 1) return boostFactor;
+    const threshold = 0.7; // start ramping after 70% to keep mid-boost stable
+    const maxRamp = 20 / maxBoost; // target final top speed: 20x base
+    const boostFraction = (boostFactor - 1) / Math.max(1e-6, maxBoost - 1);
+    if (boostFraction <= threshold) return boostFactor;
+    const t = (boostFraction - threshold) / (1 - threshold);
+    const ramp = THREE.MathUtils.lerp(1, maxRamp, t);
+    return boostFactor * ramp;
   }
 
   private updateTransform(delta: number, input: InputState): void {
