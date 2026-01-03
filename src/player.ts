@@ -181,7 +181,7 @@ export class PlayerController {
       if (this.fireBuffer) {
         const laserSound = new THREE.Audio(this.listener);
         laserSound.setBuffer(this.fireBuffer);
-        laserSound.setVolume(0.6);
+        laserSound.setVolume(0.3); // 50% quieter
         laserSound.play();
       }
     });
