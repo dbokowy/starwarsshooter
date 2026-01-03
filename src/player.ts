@@ -482,7 +482,7 @@ export class PlayerController {
     const yawIntent = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const pitchIntent = (input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0);
     const verticalIntent = THREE.MathUtils.clamp(
-      (input.up ? 1 : 0) - (input.down ? 1 : 0) + pitchIntent * 0.5, // include pitch so climb/dive still affect exhaust
+      this.tmpMove.y / Math.max(this.config.strafeSpeed, 0.001) + pitchIntent * 0.3, // tie exhaust sway to actual vertical motion
       -1,
       1
     );
