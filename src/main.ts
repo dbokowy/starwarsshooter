@@ -46,7 +46,7 @@ const cameraRigController = new CameraRigController(CAMERA_RIG, renderer.domElem
 const frustum = new THREE.Frustum();
 const projScreenMatrix = new THREE.Matrix4();
 const explosions = new ExplosionManager(loader, scene, ASSETS_PATH, listener, renderer.capabilities.getMaxAnisotropy());
-const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions);
+const enemies = new EnemySquadron(loader, scene, ASSETS_PATH, explosions, IS_MOBILE);
 const prevPlayerPos = new THREE.Vector3();
 const playerDrift = new THREE.Vector3();
 

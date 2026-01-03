@@ -48,7 +48,7 @@ export class EnemySquadron {
   private readonly avoidanceRadius = 22;
   private readonly obstacleBuffer = 30;
   private readonly healthBarWidth = 7.2; // 50% longer than before
-  private enemyHitPadding = 0;
+  private readonly hitboxMultiplier: number; // extra radius: 60% mobile, 30% desktop
   private enemyHitFlashTexture?: THREE.Texture;
   private readonly speedTarget = 170;
   private readonly maxSpeed = 230;
@@ -63,8 +63,11 @@ export class EnemySquadron {
     private readonly loader: GLTFLoader,
     private readonly scene: THREE.Scene,
     private readonly assetsPath: string,
-    private readonly explosions: ExplosionManager
-  ) {}
+    private readonly explosions: ExplosionManager,
+    isMobile: boolean
+  ) {
+    this.hitboxMultiplier = isMobile ? 0.6 : 0.3;
+  }
 
   setAudio(listener: THREE.AudioListener, fireSound: AudioBuffer): void {
     this.listener = listener;
@@ -74,7 +77,6 @@ export class EnemySquadron {
   async init(count: number, player: PlayerController, formationOrigin?: THREE.Vector3): Promise<void> {
     this.prefab = await this.loadPrefab();
     const baseRadius = Math.max(this.prefab.size.x, this.prefab.size.y, this.prefab.size.z) * 0.6;
-    this.enemyHitPadding = this.prefab.size.x * 0.3; // expand hit area by ~30% of fighter width
 
     const origin = formationOrigin ? formationOrigin.clone() : player.root.position.clone().add(new THREE.Vector3(0, 0, 400));
     const formationOffsets = [
@@ -372,8 +374,9 @@ export class EnemySquadron {
       for (let j = player.bullets.length - 1; j >= 0; j -= 1) {
         const bullet = player.bullets[j];
         const distSq = bullet.mesh.position.distanceToSquared(enemy.root.position);
-        const hitRadius = Math.pow(enemy.boundingRadius + this.enemyHitPadding, 2);
-        if (distSq <= hitRadius) {
+        const hitRadius = enemy.boundingRadius * (1 + this.hitboxMultiplier);
+        const hitRadiusSq = hitRadius * hitRadius;
+        if (distSq <= hitRadiusSq) {
           this.scene.remove(bullet.mesh);
           player.bullets.splice(j, 1);
           enemy.health -= 1;

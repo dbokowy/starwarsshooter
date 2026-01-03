@@ -737,8 +737,19 @@ body.is-touch #debug-toggles {
 
 @media (max-width: 640px) {
   #fullscreen-button-wrapper {
-    top: 10px;
+    top: 52px; /* align with first mobile enemy icon */
     right: 10px;
+  }
+
+  body.is-touch .fullscreen-btn {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    filter: none;
+  }
+
+  body.is-touch .fullscreen-btn::before {
+    inset: 18%;
   }
 }
 body.is-touch #hud {
@@ -750,17 +761,23 @@ body.is-touch #hud {
 }
 
 body.is-touch .enemy-icons {
-  top: 12px;
-  left: 10px;
+  top: 52px; /* just below speed bar */
+  left: 6px;
   transform: none;
-  flex-direction: row;
-  gap: 6px;
-  padding: 8px 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-left: none;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 body.is-touch .enemy-icons-list {
-  flex-direction: row;
-  gap: 6px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 body.is-touch .enemy-icon {
