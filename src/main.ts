@@ -94,6 +94,7 @@ let winTimer: number | null = null;
 let wave = 1;
 let enemiesTotal = 0;
 let enemiesDestroyed = 0;
+let loopStarted = false;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
@@ -151,7 +152,7 @@ async function init() {
   bindToggles();
   setupFullscreenToggle();
   onResize();
-  renderer.setAnimationLoop(update);
+  renderer.render(scene, camera); // draw initial frame before gameplay starts
   showControlsModal();
 }
 
@@ -419,6 +420,11 @@ function onEnemyDestroyed(): void {
 
 function startGame(): void {
   gameStarted = true;
+  if (!loopStarted) {
+    clock.start(); // reset delta so first frame isn't huge
+    renderer.setAnimationLoop(update);
+    loopStarted = true;
+  }
   enemies.setActive(true);
   enemies.setFireEnabled(true);
   if (resultModal) resultModal.classList.add('hidden');
