@@ -131,7 +131,7 @@ export class ExplosionManager {
 
     const coreSphere =
       (() => {
-        const geo = new THREE.SphereGeometry(1.12, 12, 12); // 30% smaller core
+        const geo = new THREE.SphereGeometry(0.56, 12, 12); // 50% smaller core
         const mat = new THREE.MeshBasicMaterial({
           color: 0xfff2d0,
           transparent: true,

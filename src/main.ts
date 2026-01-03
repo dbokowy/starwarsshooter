@@ -104,15 +104,32 @@ let immortal = false;
 let gameStarted = false;
 let winPending = false;
 let winTimer: number | null = null;
+let firstWaveTimer: number | null = null;
 let wave = 1;
 let enemiesTotal = 0;
 let enemiesDestroyed = 0;
 let loopStarted = false;
+let arrivalFocusUntil = 0;
+let arrivalFocusTarget: THREE.Vector3 | null = null;
+const ARRIVAL_CAMERA_MS = 3000;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
 const startPosition = new THREE.Vector3(0, 0, 40);
 let loadingPct = 0;
+
+function setArrivalFocusFromEnemies(): void {
+  const roots = enemies.getEnemyRoots();
+  if (!roots.length) {
+    arrivalFocusTarget = destroyer ? destroyer.position.clone() : null;
+    arrivalFocusUntil = performance.now() + ARRIVAL_CAMERA_MS;
+    return;
+  }
+  const centroid = roots.reduce((acc, obj) => acc.add(obj.position), new THREE.Vector3());
+  centroid.multiplyScalar(1 / roots.length);
+  arrivalFocusTarget = centroid;
+  arrivalFocusUntil = performance.now() + ARRIVAL_CAMERA_MS;
+}
 
 init();
 
@@ -160,6 +177,7 @@ async function init() {
   );
   await enemies.init(1, player, destroyer ? destroyer.position : undefined);
   resetEnemyIcons(enemies.getEnemyTypes());
+  setArrivalFocusFromEnemies();
   hideLoading();
   prevPlayerPos.copy(player.root.position);
 
@@ -225,7 +243,11 @@ function updateCamera() {
   const desiredPosition = offset.applyQuaternion(player.root.quaternion).add(player.root.position);
   camera.position.lerp(desiredPosition, 0.12);
 
-  const lookTarget = rigOffsets.lookOffset.clone().applyQuaternion(player.root.quaternion).add(player.root.position);
+  const now = performance.now();
+  let lookTarget = rigOffsets.lookOffset.clone().applyQuaternion(player.root.quaternion).add(player.root.position);
+  if (arrivalFocusTarget && now < arrivalFocusUntil) {
+    lookTarget = arrivalFocusTarget.clone();
+  }
   smoothedLook.lerp(lookTarget, 0.2);
   camera.lookAt(smoothedLook);
 
@@ -458,10 +480,18 @@ function startGame(): void {
     renderer.setAnimationLoop(update);
     loopStarted = true;
   }
-  enemies.setActive(true);
-  enemies.setFireEnabled(true);
-  if (resultModal) resultModal.classList.add('hidden');
   clearWinTimer();
+  enemies.setActive(false);
+  enemies.setFireEnabled(false);
+  if (firstWaveTimer !== null) {
+    window.clearTimeout(firstWaveTimer);
+  }
+  firstWaveTimer = window.setTimeout(() => {
+    enemies.setActive(true);
+    enemies.setFireEnabled(true);
+    setArrivalFocusFromEnemies();
+  }, 5000);
+  if (resultModal) resultModal.classList.add('hidden');
   winPending = false;
   wave = 1;
 }
@@ -476,6 +506,10 @@ function showResult(text: string, isLoss: boolean): void {
   }
   enemies.setActive(false);
   enemies.setFireEnabled(false);
+  if (firstWaveTimer !== null) {
+    window.clearTimeout(firstWaveTimer);
+    firstWaveTimer = null;
+  }
 }
 
 function clearWinTimer(): void {
@@ -587,6 +621,7 @@ function scheduleNextWave(fighters: number, interceptors: number = 0): void {
     resetEnemyIcons(enemies.getEnemyTypes());
     enemies.setActive(true);
     enemies.setFireEnabled(true);
+    setArrivalFocusFromEnemies();
   }, 10000);
 }
 

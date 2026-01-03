@@ -106,7 +106,7 @@ export class EnemySquadron {
   private readonly healthBarWidth = 7.2; // 50% longer than before
   private readonly hitboxMultiplier: number; // extra radius: 60% mobile, 30% desktop
   private enemyHitFlashTexture?: THREE.Texture;
-  private readonly approachDuration = 10; // seconds to fly in from destroyer
+  private readonly approachDuration = 3; // seconds to fly in from destroyer
   private active = false;
   private enemyFireSound?: AudioBuffer;
   private listener?: THREE.AudioListener;
@@ -131,7 +131,13 @@ export class EnemySquadron {
     const spawnTypes = this.buildSpawnList(count, interceptors);
     const total = spawnTypes.length;
 
-    const origin = formationOrigin ? formationOrigin.clone() : player.root.position.clone().add(new THREE.Vector3(0, 0, 400));
+    const spawnDistance = this.archetypes[EnemyType.Fighter].speedTarget * this.approachDuration; // distance to cover in approach window
+    const origin = formationOrigin
+      ? (() => {
+          const dir = player.root.position.clone().sub(formationOrigin).normalize();
+          return player.root.position.clone().add(dir.multiplyScalar(spawnDistance));
+        })()
+      : player.root.position.clone().add(new THREE.Vector3(0, 0, spawnDistance)); // straight ahead, ~3s out
     const formationOffsets = [
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(14, 2, -12),
