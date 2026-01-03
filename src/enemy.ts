@@ -133,10 +133,15 @@ export class EnemySquadron {
 
     const spawnDistance = this.archetypes[EnemyType.Fighter].speedTarget * this.approachDuration; // distance to cover in approach window
     const origin = formationOrigin
-      ? (() => {
-          const dir = player.root.position.clone().sub(formationOrigin).normalize();
-          return player.root.position.clone().add(dir.multiplyScalar(spawnDistance));
-        })()
+      ? formationOrigin
+          .clone()
+          .add(
+            player.root.position
+              .clone()
+              .sub(formationOrigin)
+              .normalize()
+              .multiplyScalar(80)
+          ) // spawn just ahead of destroyer toward player
       : player.root.position.clone().add(new THREE.Vector3(0, 0, spawnDistance)); // straight ahead, ~3s out
     const formationOffsets = [
       new THREE.Vector3(0, 0, 0),

@@ -53,6 +53,7 @@ const viewForward = new THREE.Vector3();
 const viewUp = new THREE.Vector3();
 const viewRight = new THREE.Vector3();
 
+const enemyIconsContainer = document.getElementById('enemy-icons') as HTMLElement | null;
 const enemyIconsEl = document.getElementById('enemy-icons-list') as HTMLElement | null;
 const hud = new Hud({
   healthBar: document.getElementById('health-bar'),
@@ -111,7 +112,7 @@ let enemiesDestroyed = 0;
 let loopStarted = false;
 let arrivalFocusUntil = 0;
 let arrivalFocusTarget: THREE.Vector3 | null = null;
-const ARRIVAL_CAMERA_MS = 3000;
+const ARRIVAL_CAMERA_MS = 2500;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
@@ -175,9 +176,7 @@ async function init() {
     0.9337123125,
     new THREE.Vector3(0, -2, 0)
   );
-  await enemies.init(1, player, destroyer ? destroyer.position : undefined);
-  resetEnemyIcons(enemies.getEnemyTypes());
-  setArrivalFocusFromEnemies();
+  resetEnemyIcons([]); // enemy HUD appears when first wave spawns
   hideLoading();
   prevPlayerPos.copy(player.root.position);
 
@@ -438,6 +437,9 @@ function buildObstacles(): Obstacle[] {
 }
 
 function resetEnemyIcons(types: EnemyType[]): void {
+  if (enemyIconsContainer) {
+    enemyIconsContainer.style.display = types.length ? 'flex' : 'none';
+  }
   enemiesTotal = types.length;
   enemiesDestroyed = 0;
   if (!enemyIconsEl) return;
@@ -486,11 +488,13 @@ function startGame(): void {
   if (firstWaveTimer !== null) {
     window.clearTimeout(firstWaveTimer);
   }
-  firstWaveTimer = window.setTimeout(() => {
+  firstWaveTimer = window.setTimeout(async () => {
+    await enemies.reset(1, player, destroyer ? destroyer.position : undefined);
+    resetEnemyIcons(enemies.getEnemyTypes());
     enemies.setActive(true);
     enemies.setFireEnabled(true);
     setArrivalFocusFromEnemies();
-  }, 5000);
+  }, 10000);
   if (resultModal) resultModal.classList.add('hidden');
   winPending = false;
   wave = 1;
