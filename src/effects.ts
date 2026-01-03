@@ -21,7 +21,7 @@ export class EngineFlames {
     });
 
     this.glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0xfc6592,
+      color: 0xfc6592, // pink glow
       transparent: true,
       opacity: 0.12,
       blending: THREE.AdditiveBlending,
@@ -122,7 +122,7 @@ export class EngineFlames {
 
           const boostHeat = THREE.MathUtils.clamp((boostNorm - 0.8) / 0.2, 0, 1);
           const baseColor = (child.userData.baseColor as THREE.Color) ?? material.color.clone();
-          const hotColor = isCore ? new THREE.Color(0x0bc2ff) : new THREE.Color(0xff1500);
+          const hotColor = isCore ? new THREE.Color(0x0bc2ff) : new THREE.Color(0xff7bcc);
           material.color.lerpColors(baseColor, hotColor, boostHeat);
         }
       });
