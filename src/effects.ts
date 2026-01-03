@@ -98,9 +98,9 @@ export class EngineFlames {
       const verticalInfluence = (offset.y >= 0 ? -1 : 1) * vertStrength; // up -> top shrink, bottom grow
       const verticalScale = THREE.MathUtils.clamp(1 + verticalInfluence * 0.9, 0.7, 1.85); // softer top shrink, still visible bottom effect
       const rollScale = 1 + rollStrength * 0.8;
-      const lengthScale = THREE.MathUtils.lerp(0.2646, 6.8, flare) * flicker * leanScale * verticalScale * rollScale; // further ~30% shorter at idle
+      const lengthScale = THREE.MathUtils.lerp(0.22, 6.8, flare) * flicker * leanScale * verticalScale * rollScale; // ~80% shorter at idle
       const radiusScaleBias = THREE.MathUtils.clamp(1 + verticalInfluence * 0.45 + rollStrength * 0.25, 0.85, 1.45);
-      const radiusScale = THREE.MathUtils.lerp(0.1568, 1.6, flare) * flicker; // thinner at idle
+      const radiusScale = THREE.MathUtils.lerp(0.65, 1.6, flare) * flicker;
       flame.scale.set(
         flame.userData.baseRadius * radiusScale * radiusScaleBias,
         flame.userData.baseLength * lengthScale,
