@@ -361,6 +361,10 @@ export class EnemySquadron {
       const distSq = bullet.mesh.position.distanceToSquared(player.root.position);
       const hitRadius = Math.pow(player.collisionRadius + 0.8, 2);
       if (distSq <= hitRadius) {
+        if (player.isRolling() && Math.random() < 0.7) {
+          // during barrel roll let most hits pass through
+          continue;
+        }
         this.scene.remove(bullet.mesh);
         this.bullets.splice(i, 1);
         onPlayerHit();
