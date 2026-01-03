@@ -98,7 +98,7 @@ export class PlayerController {
     if (!this.boostPlayedThisHold && this.boostSound && this.boostAudio) {
       this.boostAudio.setVolume(0.5);
       this.boostAudio.setPlaybackRate(1.0);
-      const offset = Math.min(this.boostSound.duration, 1.0); // play from 1s mark
+      const offset = 2.0; // start at 2s into clip
       try {
         this.boostAudio.stop();
       } catch {
@@ -332,7 +332,7 @@ export class PlayerController {
     if (this.rollSound && this.rollAudio) {
       this.rollAudio.setVolume(0.55);
       this.rollAudio.setPlaybackRate(2.0);
-      const offset = Math.min(this.rollSound.duration, 2.0); // start at 2s into clip
+      const offset = 0.7; // start at 0.7s into clip
       try {
         this.rollAudio.stop();
       } catch {
