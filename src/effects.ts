@@ -12,7 +12,7 @@ export class EngineFlames {
   constructor(parent: THREE.Object3D, private readonly offsets: THREE.Vector3[]) {
     this.parent = parent;
     this.coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0xe6f7ff, // brighter light blue inner core
+      color: 0x7bd5ff, // intense blue inner core
       transparent: true,
       opacity: 0.6,
       blending: THREE.AdditiveBlending,
@@ -122,7 +122,7 @@ export class EngineFlames {
 
           const boostHeat = THREE.MathUtils.clamp((boostNorm - 0.8) / 0.2, 0, 1);
           const baseColor = (child.userData.baseColor as THREE.Color) ?? material.color.clone();
-          const hotColor = isCore ? new THREE.Color(0x0bc2ff) : new THREE.Color(0xff7bcc);
+          const hotColor = isCore ? new THREE.Color(0x009cff) : new THREE.Color(0xff7bcc);
           material.color.lerpColors(baseColor, hotColor, boostHeat);
         }
       });
@@ -168,7 +168,7 @@ export class EngineFlames {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const material = new THREE.PointsMaterial({
       map: getFlameParticleTexture(),
-      color: 0xbbe5ff,
+      color: 0x7bd5ff,
       size: 0.28,
       sizeAttenuation: true,
       transparent: true,
@@ -196,8 +196,8 @@ function getFlameParticleTexture(): THREE.Texture {
   if (ctx) {
     const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
     grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    grad.addColorStop(0.25, 'rgba(150, 220, 255, 0.9)');
-    grad.addColorStop(0.6, 'rgba(90, 180, 255, 0.38)');
+    grad.addColorStop(0.25, 'rgba(123, 213, 255, 0.9)');
+    grad.addColorStop(0.6, 'rgba(90, 180, 255, 0.6)');
     grad.addColorStop(1, 'rgba(40, 120, 220, 0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
