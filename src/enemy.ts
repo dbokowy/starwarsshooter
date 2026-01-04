@@ -70,12 +70,12 @@ export class EnemySquadron {
       muzzleOffsets: [new THREE.Vector3(1.8, -0.2, -2.6), new THREE.Vector3(-1.8, -0.2, -2.6)],
       bulletSpeed: 260,
       bulletLife: 4,
-      fireDelayRange: [800, 1350],
+      fireDelayRange: [400, 675], // 2x more frequent fire
       health: 3,
       speedTarget: 170,
       maxSpeed: 230,
       maxAccel: 130,
-      aimSpread: 0.18,
+      aimSpread: 0.36, // half as accurate (wider spread)
       wanderSpeedRange: [0.6, 1.4],
       collisionFailChance: 0.08,
       sizeTarget: 12
@@ -90,12 +90,12 @@ export class EnemySquadron {
       ],
       bulletSpeed: 270,
       bulletLife: 4,
-      fireDelayRange: [700, 1200],
+      fireDelayRange: [350, 600], // 2x more frequent fire
       health: 3,
       speedTarget: 170 * 1.2,
       maxSpeed: 230 * 1.2,
       maxAccel: 130 * 1.2,
-      aimSpread: 0.14,
+      aimSpread: 0.28, // half as accurate (wider spread)
       wanderSpeedRange: [0.9, 1.6],
       collisionFailChance: 0.04,
       sizeTarget: 12
