@@ -10,11 +10,11 @@ export const CAMERA_RIG: CameraRig = {
 
 export const PLAY_AREA: PlayArea = {
   minZ: -5000,
-  maxZ: 3200,
-  maxX: 13333,
-  minX: -13333,
-  maxY: 3200,
-  minY: -3200
+  maxZ: 5200,
+  maxX: 12000,
+  minX: -12000,
+  maxY: 5200,
+  minY: -5200
 };
 
 export const PLAYER_CONFIG: PlayerConfig = {
