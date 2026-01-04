@@ -9,8 +9,10 @@ type CleanupFn = () => void;
 
 export function createInputController(target: HTMLElement, onShoot: () => void): InputController {
   const state: InputState = {
-    left: false,
-    right: false,
+    yawLeft: false,
+    yawRight: false,
+    strafeLeft: false,
+    strafeRight: false,
     pitchUp: false,
     pitchDown: false,
     up: false,
@@ -32,11 +34,17 @@ export function createInputController(target: HTMLElement, onShoot: () => void):
         break;
       case 'KeyA':
       case 'ArrowLeft':
-        state.left = isDown;
+        state.yawLeft = isDown;
         break;
       case 'KeyD':
       case 'ArrowRight':
-        state.right = isDown;
+        state.yawRight = isDown;
+        break;
+      case 'KeyZ':
+        state.strafeLeft = isDown;
+        break;
+      case 'KeyC':
+        state.strafeRight = isDown;
         break;
       case 'Space':
         state.up = isDown;
@@ -146,8 +154,10 @@ function bindVirtualStick(pad: HTMLElement, stick: HTMLElement, state: InputStat
   let activePointer: number | null = null;
 
   const reset = () => {
-    state.left = false;
-    state.right = false;
+    state.yawLeft = false;
+    state.yawRight = false;
+    state.strafeLeft = false;
+    state.strafeRight = false;
     state.pitchUp = false;
     state.pitchDown = false;
     stick.style.transform = 'translate(-50%, -50%)';
@@ -159,8 +169,10 @@ function bindVirtualStick(pad: HTMLElement, stick: HTMLElement, state: InputStat
     const y = ((event.clientY - rect.top) / rect.height) * 2 - 1;
 
     const deadZone = 0.15;
-    state.left = x < -deadZone;
-    state.right = x > deadZone;
+    state.yawLeft = x < -deadZone;
+    state.yawRight = x > deadZone;
+    state.strafeLeft = false;
+    state.strafeRight = false;
     state.pitchUp = y < -deadZone;
     state.pitchDown = y > deadZone;
 
@@ -293,8 +305,10 @@ function isTouchDevice(): boolean {
 }
 
 function resetState(state: InputState): void {
-  state.left = false;
-  state.right = false;
+  state.yawLeft = false;
+  state.yawRight = false;
+  state.strafeLeft = false;
+  state.strafeRight = false;
   state.pitchUp = false;
   state.pitchDown = false;
   state.up = false;

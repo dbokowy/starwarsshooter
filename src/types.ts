@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 
 export type InputState = {
-  left: boolean;
-  right: boolean;
+  yawLeft: boolean;
+  yawRight: boolean;
+  strafeLeft: boolean;
+  strafeRight: boolean;
   pitchUp: boolean;
   pitchDown: boolean;
   up: boolean;

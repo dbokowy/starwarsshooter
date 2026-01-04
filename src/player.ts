@@ -74,6 +74,7 @@ export class PlayerController {
     this.currentSpeed = config.baseSpeed;
     this.health = config.maxHealth;
     this.engineFlames = new EngineFlames(this.root, config.flameOffsets);
+    this.root.rotation.order = 'YXZ'; // keep pitch intuitive after yaw
     this.root.position.copy(this.startPosition);
     this.scene.add(this.root);
   }
@@ -539,12 +540,15 @@ export class PlayerController {
 
     this.tmpMove.set(0, 0, 0);
     this.tmpMove.addScaledVector(this.tmpForward, this.currentSpeed);
-    this.tmpMove.addScaledVector(this.tmpRight, this.config.strafeSpeed * ((input.right ? 1 : 0) - (input.left ? 1 : 0)));
+    this.tmpMove.addScaledVector(
+      this.tmpRight,
+      this.config.strafeSpeed * ((input.strafeRight ? 1 : 0) - (input.strafeLeft ? 1 : 0))
+    );
     this.tmpMove.addScaledVector(this.tmpUp, this.config.strafeSpeed * ((input.up ? 1 : 0) - (input.down ? 1 : 0)));
 
     this.root.position.addScaledVector(this.tmpMove, delta);
 
-    const yawIntent = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const yawIntent = (input.yawRight ? 1 : 0) - (input.yawLeft ? 1 : 0);
     const pitchIntent = (input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0);
     const verticalIntent = THREE.MathUtils.clamp(
       this.tmpMove.y / Math.max(this.config.strafeSpeed, 0.001) + pitchIntent * 0.3, // tie exhaust sway to actual vertical motion
@@ -563,7 +567,7 @@ export class PlayerController {
     this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, pitchTarget, pitchSmooth);
 
     const targetRoll = THREE.MathUtils.clamp(
-      ((input.left ? 1 : 0) - (input.right ? 1 : 0)) * 1,
+      ((input.yawLeft ? 1 : 0) - (input.yawRight ? 1 : 0)) * 1,
       -Math.PI / 3,
       Math.PI / 3
     ); // allow up to ~60 deg bank
