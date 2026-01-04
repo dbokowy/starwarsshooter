@@ -31,8 +31,8 @@ export class Hud {
   updateSpeed(currentSpeed: number, baseSpeed: number, boostMultiplier: number, regenRatio: number = 1): void {
     if (!this.speedBar) return;
     const minSpeed = baseSpeed;
-    const maxSpeed = baseSpeed * boostMultiplier;
-    const norm = THREE.MathUtils.clamp((currentSpeed - minSpeed) / (maxSpeed - minSpeed), 0, 1);
+    const maxSpeed = 180; // visual cap: target top speed
+    const norm = THREE.MathUtils.clamp((currentSpeed - minSpeed) / Math.max(1e-6, maxSpeed - minSpeed), 0, 1);
     const adjusted = 0.1 + norm * 0.9; // start at 10%, max 100%
     this.speedBar.style.width = `${adjusted * 100}%`;
 

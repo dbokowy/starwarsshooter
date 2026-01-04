@@ -28,10 +28,6 @@ export class PlayerController {
   private lastShot = 0;
   private readonly engineFlames: EngineFlames;
   private fireBuffer: AudioBuffer | null = null;
-  private overboostBudgetMs = 8000; // active boost duration budget in ms
-  private overboostCooldownMs = 10000; // 10s cooldown before refill
-  private overboostRemainingMs = 8000;
-  private overboostLockedUntil = 0;
   private destroyed = false;
   private rolling = false;
   private rollTime = 0;
@@ -259,7 +255,7 @@ export class PlayerController {
   }
 
   getBoostRegenRatio(): number {
-    return THREE.MathUtils.clamp(this.overboostRemainingMs / this.overboostBudgetMs, 0, 1);
+    return THREE.MathUtils.clamp(0, 0, 1);
   }
 
   destroy(): void {
@@ -492,46 +488,12 @@ export class PlayerController {
   }
 
   private updateSpeed(delta: number, input: InputState): void {
-    const now = performance.now();
-    const maxBoost = this.config.boostMultiplier; // ~10x at 70%, ~20x after ramp
-    const regularBoost = 2; // baseline boost gives ~2x speed
-
-    let boostFactor = 1;
-    const lockActive = now < this.overboostLockedUntil;
-    const canUseOverboost = this.overboostRemainingMs > 0 && !lockActive;
-
-    if (input.boost && canUseOverboost) {
-      boostFactor = maxBoost;
-      this.overboostRemainingMs = Math.max(0, this.overboostRemainingMs - delta * 1000);
-      if (this.overboostRemainingMs === 0) {
-        this.overboostLockedUntil = now + this.overboostCooldownMs;
-      }
-    } else if (input.boost && !canUseOverboost) {
-      // during cooldown or empty reserve: cap at 70% of max
-      boostFactor = Math.max(regularBoost, maxBoost * 0.7);
-    } else if (!input.boost && !lockActive && this.overboostRemainingMs < this.overboostBudgetMs) {
-      // regen only when not boosting and cooldown finished
-      this.overboostRemainingMs = Math.min(this.overboostBudgetMs, this.overboostRemainingMs + delta * 1000);
-    }
-
-    boostFactor = this.applyLateBoostRamp(boostFactor, maxBoost);
-
-    const targetSpeed = this.config.baseSpeed * boostFactor;
-    const accelRate = 0.75;
+    const targetSpeed = input.boost ? 180 : this.config.baseSpeed;
+    const isDecel = targetSpeed < this.currentSpeed;
+    const accelRate = isDecel ? 1.8 : 0.9; // quicker slowdown, moderate accel up
     const baseSmoothing = 1 - Math.exp(-accelRate * delta);
     const easeOut = 1 - Math.pow(1 - baseSmoothing, 2.2);
     this.currentSpeed = THREE.MathUtils.lerp(this.currentSpeed, targetSpeed, easeOut);
-  }
-
-  private applyLateBoostRamp(boostFactor: number, maxBoost: number): number {
-    if (boostFactor <= 1) return boostFactor;
-    const threshold = 0.7; // start ramping after 70% to keep mid-boost stable
-    const maxRamp = 20 / maxBoost; // target final top speed: 20x base
-    const boostFraction = (boostFactor - 1) / Math.max(1e-6, maxBoost - 1);
-    if (boostFraction <= threshold) return boostFactor;
-    const t = (boostFraction - threshold) / (1 - threshold);
-    const ramp = THREE.MathUtils.lerp(1, maxRamp, t);
-    return boostFactor * ramp;
   }
 
   private updateTransform(delta: number, input: InputState): void {

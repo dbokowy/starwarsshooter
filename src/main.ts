@@ -186,7 +186,10 @@ async function init() {
     enemyArrivalSound = buffer;
     setEnemyAudioIfReady();
   });
-  audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => player.setHitSound(buffer));
+  audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => {
+    player.setHitSound(buffer);
+    enemies.setAudio(listener, enemyFireSound ?? buffer, enemyArrivalSound ?? undefined, buffer);
+  });
   audioLoader.load(`${ASSETS_PATH}/xwing_boost.ogg`, buffer => player.setBoostSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/xwing_pass.ogg`, buffer => player.setRollSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/explosion-fx-2.ogg`, buffer => explosions.setSoundBuffer(buffer));
@@ -217,7 +220,9 @@ function update() {
   const elapsed = clock.getElapsedTime();
   const now = performance.now();
   if (fpsEl && devUiVisible && delta > 0) {
-    fpsEl.textContent = `${(1 / delta).toFixed(0)} fps`;
+    const fps = (1 / delta).toFixed(0);
+    const speed = player.currentSpeed.toFixed(1);
+    fpsEl.innerHTML = `${fps} fps<br/>${speed} u/s`;
   }
 
   camera.getWorldDirection(viewForward);

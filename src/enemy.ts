@@ -114,6 +114,7 @@ export class EnemySquadron {
   private active = false;
   private enemyFireSound?: AudioBuffer;
   private enemyArrivalSound?: AudioBuffer;
+  private enemyHitSound?: AudioBuffer;
   private listener?: THREE.AudioListener;
   private waveFireHoldUntil = 0;
   private readonly arrivalSoundLeadMs = 2000; // play arrival sfx ~2s before reaching formation
@@ -134,10 +135,11 @@ export class EnemySquadron {
     this.hitboxMultiplier = isMobile ? 0.6 : 0.3;
   }
 
-  setAudio(listener: THREE.AudioListener, fireSound: AudioBuffer, arrivalSound?: AudioBuffer): void {
+  setAudio(listener: THREE.AudioListener, fireSound: AudioBuffer, arrivalSound?: AudioBuffer, hitSound?: AudioBuffer): void {
     this.listener = listener;
     this.enemyFireSound = fireSound;
     this.enemyArrivalSound = arrivalSound;
+    this.enemyHitSound = hitSound;
   }
 
   async init(count: number, player: PlayerController, formationOrigin?: THREE.Vector3, interceptors: number = 0): Promise<void> {
@@ -499,6 +501,14 @@ export class EnemySquadron {
           player.bullets.splice(j, 1);
           enemy.health -= 1;
           this.updateHealthFill(enemy);
+          if (this.enemyHitSound && this.listener) {
+            const snd = new THREE.Audio(this.listener);
+            snd.setBuffer(this.enemyHitSound);
+            snd.setVolume(0.75);
+            snd.setPlaybackRate(1.0 + Math.random() * 0.1);
+            enemy.root.add(snd);
+            snd.play();
+          }
           enemy.hitFlashTimer = 0.4;
           if (enemy.health <= 0) {
             this.destroyEnemy(enemy);
