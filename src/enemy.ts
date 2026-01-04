@@ -501,6 +501,9 @@ export class EnemySquadron {
       const bullet = this.bullets[i];
       const hitRadius = player.collisionRadius + 2.0;
       if (bullet.mesh.position.distanceTo(player.root.position) <= hitRadius) {
+        if (player.isRolling() && Math.random() < 0.7) {
+          continue;
+        }
         this.scene.remove(bullet.mesh);
         this.bullets.splice(i, 1);
         onPlayerHit();
