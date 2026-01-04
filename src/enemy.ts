@@ -120,7 +120,7 @@ export class EnemySquadron {
   private listener?: THREE.AudioListener;
   private waveFireHoldUntil = 0;
   private readonly arrivalSoundLeadMs = 2000; // play arrival sfx ~2s before reaching formation
-  private readonly burstIntervalRange: [number, number] = [300, 400];
+  private readonly burstIntervalRange: [number, number] = [180, 260];
   private readonly arrivalSoundStaggerMs = 450; // wider stagger between ships to avoid overlap
   private readonly tmpWander = new THREE.Vector3();
   private readonly tmpVecA = new THREE.Vector3();
