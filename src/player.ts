@@ -339,7 +339,8 @@ export class PlayerController {
       } catch {
         /* ignore */
       }
-      this.rollAudio.play(0, offset); // fire immediately on key press
+      this.rollAudio.offset = offset;
+      this.rollAudio.play(); // fire immediately on key press
     }
   }
 
