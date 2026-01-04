@@ -110,6 +110,10 @@ export class EnemySquadron {
   private active = false;
   private enemyFireSound?: AudioBuffer;
   private listener?: THREE.AudioListener;
+  private readonly tmpVecA = new THREE.Vector3();
+  private readonly tmpVecB = new THREE.Vector3();
+  private readonly tmpVecC = new THREE.Vector3();
+  private readonly tmpVecD = new THREE.Vector3();
 
   constructor(
     private readonly loader: GLTFLoader,
@@ -133,16 +137,11 @@ export class EnemySquadron {
 
     const spawnDistance = this.archetypes[EnemyType.Fighter].speedTarget * this.approachDuration; // distance to cover in approach window
     const origin = formationOrigin
-      ? formationOrigin
-          .clone()
-          .add(
-            player.root.position
-              .clone()
-              .sub(formationOrigin)
-              .normalize()
-              .multiplyScalar(80)
-          ) // spawn just ahead of destroyer toward player
-      : player.root.position.clone().add(new THREE.Vector3(0, 0, spawnDistance)); // straight ahead, ~3s out
+      ? (() => {
+          const dir = this.tmpVecA.copy(player.root.position).sub(formationOrigin).normalize();
+          return this.tmpVecB.copy(formationOrigin).add(dir.multiplyScalar(80)); // spawn just ahead of destroyer toward player
+        })()
+      : this.tmpVecC.copy(player.root.position).add(this.tmpVecD.set(0, 0, spawnDistance)); // straight ahead, ~3s out
     const formationOffsets = [
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(14, 2, -12),
@@ -260,13 +259,11 @@ export class EnemySquadron {
       Math.cos(enemy.wanderPhase * 1.1) * 26
     );
 
-    const baseTarget = playerPos
-      .clone()
-      .add(
-        new THREE.Vector3(Math.cos(enemy.orbitAngle), Math.sin(enemy.orbitAngle * 1.4) * 0.35, Math.sin(enemy.orbitAngle))
-          .normalize()
-          .multiplyScalar(orbitRadius + enemy.radiusOffset)
-      )
+    const baseTarget = this.tmpVecA
+      .set(Math.cos(enemy.orbitAngle), Math.sin(enemy.orbitAngle * 1.4) * 0.35, Math.sin(enemy.orbitAngle))
+      .normalize()
+      .multiplyScalar(orbitRadius + enemy.radiusOffset)
+      .add(playerPos)
       .add(enemy.formationOffset);
 
     // Approach phase from origin to baseTarget over approachDuration
@@ -279,7 +276,7 @@ export class EnemySquadron {
       return;
     }
 
-    const desiredPos = baseTarget.add(wander);
+    const desiredPos = this.tmpVecB.copy(baseTarget).add(wander);
 
     const desiredVel = desiredPos.sub(enemy.root.position).normalize().multiplyScalar(enemy.archetype.speedTarget);
 
@@ -287,7 +284,7 @@ export class EnemySquadron {
     let asteroidPush = 0;
     this.enemies.forEach(other => {
       if (other === enemy) return;
-      const offset = enemy.root.position.clone().sub(other.root.position);
+      const offset = this.tmpVecC.copy(enemy.root.position).sub(other.root.position);
       const dist = offset.length();
       if (dist < this.avoidanceRadius && dist > 0.0001) {
         avoidance.add(offset.normalize().multiplyScalar((this.avoidanceRadius - dist) * 2));
@@ -295,7 +292,7 @@ export class EnemySquadron {
     });
 
     obstacles.forEach(obstacle => {
-      const offset = enemy.root.position.clone().sub(obstacle.position);
+      const offset = this.tmpVecD.copy(enemy.root.position).sub(obstacle.position);
       const dist = offset.length();
       const safeDist = obstacle.radius + this.obstacleBuffer;
       if (dist < safeDist && dist > 0.001) {

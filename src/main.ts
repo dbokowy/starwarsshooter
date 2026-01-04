@@ -52,6 +52,14 @@ const playerDrift = new THREE.Vector3();
 const viewForward = new THREE.Vector3();
 const viewUp = new THREE.Vector3();
 const viewRight = new THREE.Vector3();
+const tmpCamOffset = new THREE.Vector3();
+const tmpLookTarget = new THREE.Vector3();
+const tmpAimForward = new THREE.Vector3();
+const tmpAimOrigin = new THREE.Vector3();
+const tmpAimPoint = new THREE.Vector3();
+const tmpVerticalNudge = new THREE.Vector3();
+const tmpAimDir = new THREE.Vector3();
+const muzzleAverage = PLAYER_CONFIG.muzzleOffsets.reduce((acc, v) => acc.add(v), new THREE.Vector3()).multiplyScalar(1 / PLAYER_CONFIG.muzzleOffsets.length);
 
 const enemyIconsContainer = document.getElementById('enemy-icons') as HTMLElement | null;
 const enemyIconsEl = document.getElementById('enemy-icons-list') as HTMLElement | null;
@@ -165,9 +173,9 @@ async function init() {
     enemies.setAudio(listener, buffer);
   });
   audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => player.setHitSound(buffer));
-  audioLoader.load(`${ASSETS_PATH}/xwing_boost.mp3`, buffer => player.setBoostSound(buffer));
-  audioLoader.load(`${ASSETS_PATH}/xwing_pass.mp3`, buffer => player.setRollSound(buffer));
-  audioLoader.load(`${ASSETS_PATH}/explosion-fx-2.mp3`, buffer => explosions.setSoundBuffer(buffer));
+  audioLoader.load(`${ASSETS_PATH}/xwing_boost.ogg`, buffer => player.setBoostSound(buffer));
+  audioLoader.load(`${ASSETS_PATH}/xwing_pass.ogg`, buffer => player.setRollSound(buffer));
+  audioLoader.load(`${ASSETS_PATH}/explosion-fx-2.ogg`, buffer => explosions.setSoundBuffer(buffer));
   await explosions.init();
   loadBackgroundMusic();
   await player.loadModel(
@@ -237,15 +245,15 @@ function updateCamera() {
   const basePullback = THREE.MathUtils.lerp(1, 1.7, throttle);
   const topSegment = THREE.MathUtils.clamp((throttle - 0.8) / 0.2, 0, 1);
   const cameraPullback = THREE.MathUtils.lerp(basePullback, basePullback * 2, topSegment); // double effect in last 20%
-  const offset = rigOffsets.cameraOffset.clone().multiplyScalar(cameraPullback);
+  const offset = tmpCamOffset.copy(rigOffsets.cameraOffset).multiplyScalar(cameraPullback);
 
   const desiredPosition = offset.applyQuaternion(player.root.quaternion).add(player.root.position);
   camera.position.lerp(desiredPosition, 0.12);
 
   const now = performance.now();
-  let lookTarget = rigOffsets.lookOffset.clone().applyQuaternion(player.root.quaternion).add(player.root.position);
+  let lookTarget = tmpLookTarget.copy(rigOffsets.lookOffset).applyQuaternion(player.root.quaternion).add(player.root.position);
   if (arrivalFocusTarget && now < arrivalFocusUntil) {
-    lookTarget = arrivalFocusTarget.clone();
+    lookTarget = tmpLookTarget.copy(arrivalFocusTarget);
   }
   smoothedLook.lerp(lookTarget, 0.2);
   camera.lookAt(smoothedLook);
@@ -262,17 +270,13 @@ function updateCamera() {
 function updateCrosshair() {
   if (!crosshairEl) return;
   // Anchor the crosshair near the laser convergence line (forward of the muzzle cluster)
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.root.quaternion).normalize();
-  const muzzleAverage = PLAYER_CONFIG.muzzleOffsets
-    .reduce((acc, v) => acc.add(v), new THREE.Vector3())
-    .multiplyScalar(1 / PLAYER_CONFIG.muzzleOffsets.length)
-    .applyQuaternion(player.root.quaternion);
-  const aimOrigin = player.root.position.clone().add(muzzleAverage);
+  const forward = tmpAimForward.set(0, 0, -1).applyQuaternion(player.root.quaternion).normalize();
+  const aimOrigin = tmpAimOrigin.copy(muzzleAverage).applyQuaternion(player.root.quaternion).add(player.root.position);
   const aimDistance = 180; // closer to pull reticle down toward laser convergence
-  const verticalNudge = new THREE.Vector3(0, -1, 0).applyQuaternion(player.root.quaternion).multiplyScalar(6); // slight drop
-  const aimPoint = aimOrigin
-    .clone()
-    .add(forward.clone().multiplyScalar(aimDistance))
+  const verticalNudge = tmpVerticalNudge.set(0, -1, 0).applyQuaternion(player.root.quaternion).multiplyScalar(6); // slight drop
+  const aimPoint = tmpAimPoint
+    .copy(aimOrigin)
+    .add(tmpAimDir.copy(forward).multiplyScalar(aimDistance))
     .add(verticalNudge);
 
   const projBase = aimPoint.project(camera);
