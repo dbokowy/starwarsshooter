@@ -550,11 +550,7 @@ export class PlayerController {
 
     const yawIntent = (input.yawRight ? 1 : 0) - (input.yawLeft ? 1 : 0);
     const pitchIntent = (input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0);
-    const verticalIntent = THREE.MathUtils.clamp(
-      this.tmpMove.y / Math.max(this.config.strafeSpeed, 0.001) + pitchIntent * 0.3, // tie exhaust sway to actual vertical motion
-      -1,
-      1
-    );
+    const verticalIntent = THREE.MathUtils.clamp(pitchIntent, -1, 1); // flame length tied to W/S input, not motion direction
 
     const yawTarget = this.root.rotation.y + yawIntent * -delta * 1.85; // more responsive yaw
     const pitchTargetUnclamped = this.root.rotation.x + pitchIntent * delta * 1.5;
