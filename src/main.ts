@@ -193,7 +193,9 @@ async function init() {
     player.setHitSound(buffer);
     enemies.setAudio(listener, enemyFireSound ?? buffer, enemyArrivalSound ?? undefined, buffer);
   });
+  audioLoader.load(`${ASSETS_PATH}/shield_regeneration.mp3`, buffer => player.setShieldRegenSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/xwing_boost.ogg`, buffer => player.setBoostSound(buffer));
+  audioLoader.load(`${ASSETS_PATH}/xwing_accelerate.ogg`, buffer => player.setAccelerateSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/xwing_pass.ogg`, buffer => player.setRollSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/explosion-fx-2.ogg`, buffer => explosions.setSoundBuffer(buffer));
   await explosions.init();

@@ -41,9 +41,13 @@ export class PlayerController {
   private boostSound?: AudioBuffer;
   private boostSource: THREE.Audio | null = null;
   private boostAudio: THREE.Audio | null = null;
+  private accelSound?: AudioBuffer;
+  private accelSource: THREE.Audio | null = null;
+  private accelAudio: THREE.Audio | null = null;
   private boostActive = false;
   private boostPressedLast = false;
   private boostPlayedThisHold = false;
+  private normalBoostPlayedThisHold = false;
   private readonly laserCoreGeometry = new THREE.BoxGeometry(0.1, 0.1, 5.2);
   private readonly laserGlowGeometry = new THREE.BoxGeometry(0.42, 0.42, 5.8);
   private readonly laserCoreMaterial = new THREE.MeshBasicMaterial({
@@ -64,6 +68,7 @@ export class PlayerController {
   private hitFlashTimer = 0;
   private readonly hitFlashDuration = 0.35;
   private hitSoundBuffer: AudioBuffer | null = null;
+  private shieldRegenSoundBuffer: AudioBuffer | null = null;
   private wingTrails: THREE.Mesh[] = [];
   private readonly trailsEnabled = true;
   private trailsVisible = true;
@@ -96,47 +101,97 @@ export class PlayerController {
   }
 
   private handleBoostAudio(input: InputState): void {
-    const boostFraction = this.currentSpeed / (this.config.baseSpeed * this.config.boostMultiplier);
-    const aboveThreshold = boostFraction >= 0.7;
+    const boostDown = input.boost;
+    const risingEdge = boostDown && !this.boostPressedLast;
+    const normalBoostActive = boostDown && !input.overboost;
+    const overboostActive = input.overboost;
 
-    if (!input.overboost || !aboveThreshold) {
+    if (!boostDown) {
       if (this.boostSource) {
         this.boostSource.stop();
         this.boostSource = null;
       }
+      if (this.accelSource) {
+        this.accelSource.stop();
+        this.accelSource = null;
+      }
       this.boostPlayedThisHold = false;
+      this.normalBoostPlayedThisHold = false;
+      this.boostPressedLast = false;
       return;
     }
 
-    if (!this.boostPlayedThisHold && this.boostSound && this.boostAudio) {
-      this.boostAudio.setVolume(0.5);
-      this.boostAudio.setPlaybackRate(1.0);
-      const offset = 0.7; // start at 0.7s into clip
-      try {
-        this.boostAudio.stop();
-      } catch {
-        /* ignore */
+    if (overboostActive) {
+      if (this.boostSource) {
+        this.boostSource.stop();
+        this.boostSource = null;
       }
-      this.boostAudio.offset = offset;
-      this.boostAudio.play();
-      this.boostSource = this.boostAudio;
-      this.boostPlayedThisHold = true;
-      this.boostAudio.source?.addEventListener('ended', () => {
-        if (this.boostSource === this.boostAudio) {
-          this.boostSource = null;
+      this.normalBoostPlayedThisHold = false;
+      if (risingEdge && !this.boostPlayedThisHold && this.accelSound && this.accelAudio) {
+        this.accelAudio.setVolume(0.6);
+        this.accelAudio.setPlaybackRate(1.0);
+        try {
+          this.accelAudio.stop();
+        } catch {
+          /* ignore */
         }
-      });
+        this.accelAudio.offset = 1.0;
+        this.accelAudio.play();
+        this.accelSource = this.accelAudio;
+        this.boostPlayedThisHold = true;
+        this.accelAudio.source?.addEventListener('ended', () => {
+          if (this.accelSource === this.accelAudio) {
+            this.accelSource = null;
+          }
+        });
+      }
+    } else if (normalBoostActive) {
+      if (this.accelSource) {
+        this.accelSource.stop();
+        this.accelSource = null;
+      }
+      if (risingEdge && !this.normalBoostPlayedThisHold && this.boostSound && this.boostAudio) {
+        this.boostAudio.setVolume(0.5);
+        this.boostAudio.setPlaybackRate(1.0);
+        const offset = 0.7; // start at 0.7s into clip
+        try {
+          this.boostAudio.stop();
+        } catch {
+          /* ignore */
+        }
+        this.boostAudio.offset = offset;
+        this.boostAudio.play();
+        this.boostSource = this.boostAudio;
+        this.normalBoostPlayedThisHold = true;
+        this.boostAudio.source?.addEventListener('ended', () => {
+          if (this.boostSource === this.boostAudio) {
+            this.boostSource = null;
+          }
+        });
+      }
+      this.boostPlayedThisHold = false;
     }
+    this.boostPressedLast = boostDown;
   }
 
   setHitSound(buffer: AudioBuffer): void {
     this.hitSoundBuffer = buffer;
   }
 
+  setShieldRegenSound(buffer: AudioBuffer): void {
+    this.shieldRegenSoundBuffer = buffer;
+  }
+
   setBoostSound(buffer: AudioBuffer): void {
     this.boostSound = buffer;
     this.boostAudio = new THREE.Audio(this.listener);
     this.boostAudio.setBuffer(buffer);
+  }
+
+  setAccelerateSound(buffer: AudioBuffer): void {
+    this.accelSound = buffer;
+    this.accelAudio = new THREE.Audio(this.listener);
+    this.accelAudio.setBuffer(buffer);
   }
   setRollSound(buffer: AudioBuffer): void {
     this.rollSound = buffer;
@@ -145,8 +200,15 @@ export class PlayerController {
   }
 
   fullyHeal(): void {
+    const wasBelowMax = this.health < this.config.maxHealth;
     this.health = this.config.maxHealth;
     this.hitFlashTimer = 0;
+    if (wasBelowMax && this.shieldRegenSoundBuffer) {
+      const regenSound = new THREE.Audio(this.listener);
+      regenSound.setBuffer(this.shieldRegenSoundBuffer);
+      regenSound.setVolume(0.6);
+      regenSound.play();
+    }
   }
 
   async loadModel(path: string, rotation: THREE.Euler, scale: number, positionOffset: THREE.Vector3 = new THREE.Vector3(0, 0, 0)): Promise<void> {
@@ -279,6 +341,9 @@ export class PlayerController {
     this.rollTime = 0;
     this.rollLatch = false;
     this.hitFlashTimer = 0;
+    this.boostPressedLast = false;
+    this.boostPlayedThisHold = false;
+    this.normalBoostPlayedThisHold = false;
     if (this.model && this.model.userData.baseRotation) {
       this.model.rotation.copy(this.model.userData.baseRotation);
     }

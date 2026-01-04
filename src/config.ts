@@ -23,8 +23,8 @@ export const PLAYER_CONFIG: PlayerConfig = {
   boostMultiplier: 26.0869565217, // baseSpeed * boostMultiplier = 120 max cruise
   maxHealth: 100,
   muzzleOffsets: [
-    new THREE.Vector3(6.6, 1.4, -3.2),   // upper right wingtip
-    new THREE.Vector3(6.6, -1.4, -3.2),  // lower right wingtip
+    new THREE.Vector3(7.6, 1.4, -3.2),   // upper right wingtip
+    new THREE.Vector3(7.6, -1.4, -3.2),  // lower right wingtip
     new THREE.Vector3(-5.6, 0.9, -3.2),  // upper left wingtip
     new THREE.Vector3(-5.6, -0.9, -3.2)  // lower left wingtip
   ],
