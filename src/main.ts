@@ -80,9 +80,9 @@ const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElemen
 const loadingTipEl = document.querySelector('.loading-tip') as HTMLElement | null;
 const LOADING_TIPS = [
   'Przy dużej liczbie wrogów dobrze jest schować się w pasie asteroidów',
-  'Podczas manewru beczki mysliwce wroga maja 70% mniej szans na trafienie ciebie',
+  'Podczas manewru beczki mysliwce wroga maja 70% mniej szans na trafienie X-Winga',
   'Statki wroga typu TIE Interceptor sa szybsze i zwrotniejsze od myśliwców TIE Fighter',
-  'Boost przyspieszenia powyżej 70% zwiększa dwukrotnie prędkość X-winga i ma 10 sekundowy cooldown'
+  'Dwukrotne naciśnięcie klawisza przyspieszenia aktywuje krótkotrwały „boost” prędkości',
 ];
 const MIN_LOADING_MS = 4000;
 let loadingShownAt = performance.now();
