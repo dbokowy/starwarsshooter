@@ -18,6 +18,7 @@ type EnemyShip = {
   approachProgress: number;
   approachStart: THREE.Vector3;
   approachTarget: THREE.Vector3;
+  arrivalGraceUntil: number;
   health: number;
   lastShot: number;
   fireDelay: number;
@@ -110,6 +111,7 @@ export class EnemySquadron {
   private active = false;
   private enemyFireSound?: AudioBuffer;
   private listener?: THREE.AudioListener;
+  private waveFireHoldUntil = 0;
   private readonly tmpVecA = new THREE.Vector3();
   private readonly tmpVecB = new THREE.Vector3();
   private readonly tmpVecC = new THREE.Vector3();
@@ -132,6 +134,7 @@ export class EnemySquadron {
 
   async init(count: number, player: PlayerController, formationOrigin?: THREE.Vector3, interceptors: number = 0): Promise<void> {
     await this.ensurePrefabs();
+    this.waveFireHoldUntil = performance.now() + 5000; // 5s grace after wave begins
     const spawnTypes = this.buildSpawnList(count, interceptors);
     const total = spawnTypes.length;
 
@@ -196,6 +199,7 @@ export class EnemySquadron {
         approachProgress: 0,
         approachStart: startPos,
         approachTarget: targetPos,
+        arrivalGraceUntil: 0,
         health: archetype.health,
         lastShot: performance.now() - Math.random() * 600,
         fireDelay: THREE.MathUtils.randFloat(archetype.fireDelayRange[0], archetype.fireDelayRange[1]),
@@ -275,6 +279,9 @@ export class EnemySquadron {
       enemy.velocity.set(0, 0, 0);
       return;
     }
+    if (enemy.arrivalGraceUntil === 0) {
+      enemy.arrivalGraceUntil = performance.now() + 3000; // grace period before first attack after arrival
+    }
 
     const desiredPos = this.tmpVecB.copy(baseTarget).add(wander);
 
@@ -324,6 +331,8 @@ export class EnemySquadron {
   private tryShoot(enemy: EnemyShip, playerPos: THREE.Vector3, now: number): void {
     if (!this.fireEnabled) return;
     if (enemy.approachProgress < 1) return; // don't fire until in position
+    if (now < this.waveFireHoldUntil) return; // pause fire for first seconds of each wave
+    if (enemy.arrivalGraceUntil && now < enemy.arrivalGraceUntil) return; // grace window right after arrival
     const timeSinceLast = now - enemy.lastShot;
     if (timeSinceLast < enemy.fireDelay) return;
 

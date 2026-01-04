@@ -863,7 +863,8 @@ async function restartGame(): Promise<void> {
   if (resultModal) resultModal.classList.add('hidden');
   player.reset();
   wave = 1;
-  await enemies.reset(1, player, destroyer ? destroyer.position : undefined);
-  resetEnemyIcons(enemies.getEnemyTypes());
+  // Clear existing enemies/bullets and hide HUD; first wave spawns via startGame timer.
+  await enemies.reset(0, player, destroyer ? destroyer.position : undefined);
+  resetEnemyIcons([]);
   startGame();
 }

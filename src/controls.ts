@@ -39,11 +39,9 @@ export function createInputController(target: HTMLElement, onShoot: () => void):
         state.right = isDown;
         break;
       case 'Space':
-      case 'KeyR':
         state.up = isDown;
         break;
       case 'ControlLeft':
-      case 'KeyF':
         state.down = isDown;
         break;
       case 'ShiftLeft':
