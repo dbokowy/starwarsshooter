@@ -118,6 +118,7 @@ export class EnemySquadron {
   private waveFireHoldUntil = 0;
   private readonly arrivalSoundLeadMs = 2000; // play arrival sfx ~2s before reaching formation
   private readonly arrivalSoundStaggerMs = 450; // wider stagger between ships to avoid overlap
+  private readonly tmpWander = new THREE.Vector3();
   private readonly tmpVecA = new THREE.Vector3();
   private readonly tmpVecB = new THREE.Vector3();
   private readonly tmpVecC = new THREE.Vector3();
@@ -286,7 +287,7 @@ export class EnemySquadron {
     enemy.orbitAngle += delta * 0.55;
     enemy.wanderPhase += delta * enemy.wanderSpeed;
 
-    const wander = new THREE.Vector3(
+    const wander = this.tmpWander.set(
       Math.sin(enemy.wanderPhase * 1.3) * 26,
       Math.cos(enemy.wanderPhase * 0.9) * 18,
       Math.cos(enemy.wanderPhase * 1.1) * 26

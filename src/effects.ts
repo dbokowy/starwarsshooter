@@ -8,6 +8,8 @@ export class EngineFlames {
   private readonly coreGeometry: THREE.ConeGeometry;
   private readonly glowGeometry: THREE.ConeGeometry;
   private readonly sparksPerFlame = 12;
+  private readonly hotCoreColor = new THREE.Color(0x009cff);
+  private readonly hotGlowColor = new THREE.Color(0xff7bcc);
 
   constructor(parent: THREE.Object3D, private readonly offsets: THREE.Vector3[]) {
     this.parent = parent;
@@ -122,7 +124,7 @@ export class EngineFlames {
 
           const boostHeat = THREE.MathUtils.clamp((boostNorm - 0.8) / 0.2, 0, 1);
           const baseColor = (child.userData.baseColor as THREE.Color) ?? material.color.clone();
-          const hotColor = isCore ? new THREE.Color(0x009cff) : new THREE.Color(0xff7bcc);
+          const hotColor = isCore ? this.hotCoreColor : this.hotGlowColor;
           material.color.lerpColors(baseColor, hotColor, boostHeat);
         }
       });

@@ -48,6 +48,22 @@ export class PlayerController {
   private boostActive = false;
   private boostPressedLast = false;
   private boostPlayedThisHold = false;
+  private readonly laserCoreGeometry = new THREE.BoxGeometry(0.1, 0.1, 5.2);
+  private readonly laserGlowGeometry = new THREE.BoxGeometry(0.42, 0.42, 5.8);
+  private readonly laserCoreMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffe7d9, // hot white-red core
+    transparent: true,
+    opacity: 0.95,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  private readonly laserGlowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff1a00, // saturated red glow
+    transparent: true,
+    opacity: 0.82,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
   private hitFlash?: THREE.Mesh;
   private hitFlashTimer = 0;
   private readonly hitFlashDuration = 0.35;
@@ -199,26 +215,9 @@ export class PlayerController {
     if (now - this.lastShot < 160) return;
     this.lastShot = now;
 
-    const coreGeometry = new THREE.BoxGeometry(0.1, 0.1, 5.2);
-    const glowGeometry = new THREE.BoxGeometry(0.42, 0.42, 5.8);
-    const coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffe7d9, // hot white-red core
-      transparent: true,
-      opacity: 0.95,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
-    const glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff1a00, // saturated red glow
-      transparent: true,
-      opacity: 0.82,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
-
     this.config.muzzleOffsets.forEach(offset => {
-      const core = new THREE.Mesh(coreGeometry, coreMaterial);
-      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+      const core = new THREE.Mesh(this.laserCoreGeometry, this.laserCoreMaterial);
+      const glow = new THREE.Mesh(this.laserGlowGeometry, this.laserGlowMaterial);
       const laser = new THREE.Group();
       laser.add(core);
       laser.add(glow);
