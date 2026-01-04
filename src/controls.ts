@@ -140,7 +140,18 @@ function setupMobileControls(state: InputState, onShoot: () => void): CleanupFn 
   }
 
   if (boostBtn) {
-    cleanups.push(bindHoldButton(boostBtn, active => (state.boost = active)));
+    cleanups.push(
+      bindHoldButtonWithDoubleTap(
+        boostBtn,
+        active => {
+          state.boost = active;
+          if (!active) state.overboost = false;
+        },
+        () => {
+          state.overboost = true;
+        }
+      )
+    );
   }
 
   if (rollLeftBtn) {
@@ -240,6 +251,41 @@ function bindHoldButton(button: HTMLElement, onChange: (active: boolean) => void
   const activate = (event: PointerEvent) => {
     event.preventDefault();
     button.setPointerCapture?.(event.pointerId);
+    onChange(true);
+  };
+
+  const deactivate = (event: PointerEvent) => {
+    event.preventDefault();
+    button.releasePointerCapture?.(event.pointerId);
+    onChange(false);
+  };
+
+  button.addEventListener('pointerdown', activate);
+  button.addEventListener('pointerup', deactivate);
+  button.addEventListener('pointerleave', deactivate);
+  button.addEventListener('pointercancel', deactivate);
+
+  return () => {
+    button.removeEventListener('pointerdown', activate);
+    button.removeEventListener('pointerup', deactivate);
+    button.removeEventListener('pointerleave', deactivate);
+    button.removeEventListener('pointercancel', deactivate);
+    onChange(false);
+  };
+}
+
+function bindHoldButtonWithDoubleTap(button: HTMLElement, onChange: (active: boolean) => void, onDoubleTap: () => void): CleanupFn {
+  let lastTapAt = -Infinity;
+  const doubleTapMs = 320;
+
+  const activate = (event: PointerEvent) => {
+    event.preventDefault();
+    button.setPointerCapture?.(event.pointerId);
+    const now = performance.now();
+    if (now - lastTapAt <= doubleTapMs) {
+      onDoubleTap();
+    }
+    lastTapAt = now;
     onChange(true);
   };
 

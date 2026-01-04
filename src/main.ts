@@ -13,6 +13,9 @@ import { ExplosionManager } from './explosions.js';
 import { EnemySquadron, EnemyType, Obstacle } from './enemy.js';
 
 const IS_MOBILE = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1;
+const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0;
+const cpuThreads = navigator.hardwareConcurrency ?? 0;
+const IS_HIGH_END_MOBILE = IS_MOBILE && deviceMemory >= 6 && cpuThreads >= 8;
 const loadingManager = new THREE.LoadingManager();
 const renderer = createRenderer(IS_MOBILE);
 const scene = createScene();
@@ -171,7 +174,7 @@ async function init() {
   planet = await loadEnvironment(loader, scene, ASSETS_PATH);
   sun = (await createSun(scene, sunPos, 784, loader, ASSETS_PATH, planet)) as THREE.Mesh; // reduced sun size by ~30%
   setupLights(scene, !IS_MOBILE, sunPos.clone().normalize());
-  if (!IS_MOBILE) {
+  if (!IS_MOBILE || IS_HIGH_END_MOBILE) {
     destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
   }
   await spawnAsteroids(200);
