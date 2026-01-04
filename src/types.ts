@@ -19,6 +19,7 @@ export type Bullet = {
   mesh: THREE.Object3D;
   velocity: THREE.Vector3;
   life: number;
+  damage?: number;
 };
 
 export type PlayArea = {

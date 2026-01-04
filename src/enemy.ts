@@ -20,11 +20,14 @@ type EnemyShip = {
   approachTarget: THREE.Vector3;
   arrivalGraceUntil: number;
   health: number;
+  shield: number;
+  shieldMax: number;
   lastShot: number;
   fireDelay: number;
   burstShotsLeft: number;
   nextBurstShotAt: number;
   healthBar: { group: THREE.Object3D; fill: THREE.Mesh };
+  shieldBar?: { group: THREE.Object3D; fill: THREE.Mesh };
   boundingRadius: number;
   hitFlash?: THREE.Sprite;
   hitFlashTimer: number;
@@ -46,7 +49,8 @@ type LoadedModel = {
 
 export enum EnemyType {
   Fighter = 'fighter',
-  Interceptor = 'interceptor'
+  Interceptor = 'interceptor',
+  AlphaWing = 'alpha-wing'
 }
 
 type EnemyArchetype = {
@@ -55,6 +59,7 @@ type EnemyArchetype = {
   bulletSpeed: number;
   bulletLife: number;
   fireDelayRange: [number, number];
+  damageMultiplier: number;
   health: number;
   speedTarget: number;
   maxSpeed: number;
@@ -76,6 +81,7 @@ export class EnemySquadron {
       bulletSpeed: 260,
       bulletLife: 4,
       fireDelayRange: [800, 1350], // 2x less frequent fire
+      damageMultiplier: 1,
       health: 3,
       speedTarget: 170,
       maxSpeed: 230,
@@ -96,6 +102,7 @@ export class EnemySquadron {
       bulletSpeed: 270,
       bulletLife: 4,
       fireDelayRange: [700, 1200], // 2x less frequent fire
+      damageMultiplier: 1,
       health: 3,
       speedTarget: 170 * 1.2,
       maxSpeed: 230 * 1.2,
@@ -104,6 +111,22 @@ export class EnemySquadron {
       wanderSpeedRange: [0.9, 1.6],
       collisionFailChance: 0.04,
       sizeTarget: 12
+    },
+    [EnemyType.AlphaWing]: {
+      modelPath: 'star_wars_alpha-class_xg-1_star_wing/scene.gltf',
+      muzzleOffsets: [new THREE.Vector3(1.9, -0.2, -2.8), new THREE.Vector3(-1.9, -0.2, -2.8)],
+      bulletSpeed: 260,
+      bulletLife: 4,
+      fireDelayRange: [900, 1400],
+      damageMultiplier: 2,
+      health: 6,
+      speedTarget: 170,
+      maxSpeed: 230,
+      maxAccel: 130,
+      aimSpread: 0.36,
+      wanderSpeedRange: [0.6, 1.4],
+      collisionFailChance: 0.08,
+      sizeTarget: 13
     }
   };
   private fireEnabled = true;
@@ -145,10 +168,16 @@ export class EnemySquadron {
     this.enemyHitSound = hitSound;
   }
 
-  async init(count: number, player: PlayerController, formationOrigin?: THREE.Vector3, interceptors: number = 0): Promise<void> {
+  async init(
+    count: number,
+    player: PlayerController,
+    formationOrigin?: THREE.Vector3,
+    interceptors: number = 0,
+    includeAlpha: boolean = false
+  ): Promise<void> {
     await this.ensurePrefabs();
     this.waveFireHoldUntil = performance.now() + 5000; // 5s grace after wave begins
-    const spawnTypes = this.buildSpawnList(count, interceptors);
+    const spawnTypes = this.buildSpawnList(count, interceptors, includeAlpha);
     const total = spawnTypes.length;
 
     const spawnDistance = this.archetypes[EnemyType.Fighter].speedTarget * this.approachDuration; // distance to cover in approach window
@@ -176,6 +205,7 @@ export class EnemySquadron {
       const model = clone(prefab.scene);
       model.rotateY(Math.PI); // face forward along -Z like fighters
       root.add(model);
+      root.userData.enemyType = type;
       const hitFlash = this.createHitFlash();
       root.add(hitFlash);
 
@@ -197,6 +227,9 @@ export class EnemySquadron {
 
       const healthBar = this.createHealthBar(baseRadius);
       root.add(healthBar.group);
+      const shieldMax = type === EnemyType.AlphaWing ? archetype.health : 0;
+      const shieldBar = shieldMax > 0 ? this.createShieldBar(baseRadius) : undefined;
+      if (shieldBar) root.add(shieldBar.group);
 
       this.scene.add(root);
       this.enemies.push({
@@ -216,11 +249,14 @@ export class EnemySquadron {
         arrivalSoundPlayed: false,
         arrivalSoundDelayMs: i * this.arrivalSoundStaggerMs + Math.random() * 300,
         health: archetype.health,
+        shield: shieldMax,
+        shieldMax,
         lastShot: performance.now() - Math.random() * 600,
         fireDelay: THREE.MathUtils.randFloat(archetype.fireDelayRange[0], archetype.fireDelayRange[1]),
         burstShotsLeft: 0,
         nextBurstShotAt: 0,
         healthBar,
+        shieldBar,
         boundingRadius: baseRadius,
         hitFlash,
         hitFlashTimer: 0
@@ -228,7 +264,13 @@ export class EnemySquadron {
     }
   }
 
-  async reset(count: number, player: PlayerController, formationOrigin?: THREE.Vector3, interceptors: number = 0): Promise<void> {
+  async reset(
+    count: number,
+    player: PlayerController,
+    formationOrigin?: THREE.Vector3,
+    interceptors: number = 0,
+    includeAlpha: boolean = false
+  ): Promise<void> {
     // remove existing enemies
     this.enemies.forEach(e => {
       this.scene.remove(e.root);
@@ -240,7 +282,7 @@ export class EnemySquadron {
     }
     this.bullets.length = 0;
     this.active = false;
-    await this.init(count, player, formationOrigin, interceptors);
+    await this.init(count, player, formationOrigin, interceptors, includeAlpha);
   }
 
   private playArrivalSound(enemy: EnemyShip): void {
@@ -269,7 +311,7 @@ export class EnemySquadron {
     camera: THREE.Camera,
     obstacles: Obstacle[],
     now: number,
-    onPlayerHit: () => void,
+    onPlayerHit: (damageMultiplier?: number) => void,
     onEnemyDestroyed: (type: EnemyType) => void
   ): void {
     if (!this.active) return;
@@ -469,7 +511,12 @@ export class EnemySquadron {
       laser.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), aimDir); // align beam to travel direction
       const velocity = aimDir.multiplyScalar(enemy.archetype.bulletSpeed);
 
-      this.bullets.push({ mesh: laser, velocity, life: enemy.archetype.bulletLife });
+      this.bullets.push({
+        mesh: laser,
+        velocity,
+        life: enemy.archetype.bulletLife,
+        damage: enemy.archetype.damageMultiplier
+      });
       this.scene.add(laser);
 
       if (this.enemyFireSound && this.listener) {
@@ -496,7 +543,7 @@ export class EnemySquadron {
     }
   }
 
-  private handleEnemyHitsPlayer(player: PlayerController, onPlayerHit: () => void): void {
+  private handleEnemyHitsPlayer(player: PlayerController, onPlayerHit: (damageMultiplier?: number) => void): void {
     for (let i = this.bullets.length - 1; i >= 0; i -= 1) {
       const bullet = this.bullets[i];
       const hitRadius = player.collisionRadius + 2.0;
@@ -506,7 +553,7 @@ export class EnemySquadron {
         }
         this.scene.remove(bullet.mesh);
         this.bullets.splice(i, 1);
-        onPlayerHit();
+        onPlayerHit(bullet.damage ?? 1);
       }
     }
   }
@@ -522,21 +569,24 @@ export class EnemySquadron {
         if (distSq <= hitRadiusSq) {
           this.scene.remove(bullet.mesh);
           player.bullets.splice(j, 1);
-          enemy.health -= 1;
-          this.updateHealthFill(enemy);
-          if (this.enemyHitSound && this.listener) {
-            const snd = new THREE.Audio(this.listener);
-            snd.setBuffer(this.enemyHitSound);
-            snd.setVolume(0.75);
-            snd.setPlaybackRate(1.0 + Math.random() * 0.1);
-            enemy.root.add(snd);
-            snd.play();
+          if (enemy.shield > 0) {
+            enemy.shield = Math.max(0, enemy.shield - 1);
+            this.updateShieldFill(enemy);
+          } else {
+            enemy.health -= 1;
+            this.updateHealthFill(enemy);
           }
           enemy.hitFlashTimer = 0.4;
           if (enemy.health <= 0) {
             this.destroyEnemy(enemy);
             this.enemies.splice(i, 1);
             onEnemyDestroyed(enemy.type);
+          } else if (this.enemyHitSound && this.listener) {
+            const snd = new THREE.Audio(this.listener);
+            snd.setBuffer(this.enemyHitSound);
+            snd.setVolume(0.75);
+            snd.setPlaybackRate(1.0 + Math.random() * 0.1);
+            snd.play();
           }
           break;
         }
@@ -551,15 +601,29 @@ export class EnemySquadron {
   }
 
   private updateHealthBar(enemy: EnemyShip, camera: THREE.Camera, target: THREE.Vector3): void {
-    enemy.healthBar.group.position.setY(enemy.boundingRadius * 0.8 + 2.2);
+    const baseY = enemy.boundingRadius * 0.8 + 2.2;
+    enemy.healthBar.group.position.setY(baseY);
     enemy.healthBar.group.lookAt(target);
     this.updateHealthFill(enemy);
+    if (enemy.shieldBar) {
+      enemy.shieldBar.group.position.setY(baseY + 1.4);
+      enemy.shieldBar.group.lookAt(target);
+      this.updateShieldFill(enemy);
+    }
   }
 
   private updateHealthFill(enemy: EnemyShip): void {
     const pct = THREE.MathUtils.clamp(enemy.health / enemy.archetype.health, 0, 1);
     enemy.healthBar.fill.scale.x = pct;
     enemy.healthBar.fill.position.x = -((1 - pct) * this.healthBarWidth) / 2;
+  }
+
+  private updateShieldFill(enemy: EnemyShip): void {
+    if (!enemy.shieldBar) return;
+    const pct = enemy.shieldMax > 0 ? THREE.MathUtils.clamp(enemy.shield / enemy.shieldMax, 0, 1) : 0;
+    enemy.shieldBar.fill.scale.x = pct;
+    enemy.shieldBar.fill.position.x = -((1 - pct) * this.healthBarWidth) / 2;
+    enemy.shieldBar.group.visible = pct > 0.02;
   }
 
   private updateHitFlash(enemy: EnemyShip, delta: number, camera: THREE.Camera): void {
@@ -598,6 +662,26 @@ export class EnemySquadron {
     barGroup.add(fill);
     barGroup.position.set(0, radius * 0.8 + 4.4, 0);
     barGroup.renderOrder = 10;
+
+    return { group: barGroup, fill };
+  }
+
+  private createShieldBar(radius: number): { group: THREE.Object3D; fill: THREE.Mesh } {
+    const barGroup = new THREE.Group();
+    const bgGeom = new THREE.PlaneGeometry(this.healthBarWidth + 1.2, 0.9);
+    const fillGeom = new THREE.PlaneGeometry(this.healthBarWidth, 0.58);
+
+    const bgMat = new THREE.MeshBasicMaterial({ color: 0x0b1d3a, transparent: true, opacity: 0.7, depthWrite: false });
+    const fillMat = new THREE.MeshBasicMaterial({ color: 0x5ecbff, transparent: true, opacity: 0.95, depthWrite: false });
+
+    const bg = new THREE.Mesh(bgGeom, bgMat);
+    const fill = new THREE.Mesh(fillGeom, fillMat);
+    fill.position.z = 0.01;
+
+    barGroup.add(bg);
+    barGroup.add(fill);
+    barGroup.position.set(0, radius * 0.8 + 5.8, 0);
+    barGroup.renderOrder = 11;
 
     return { group: barGroup, fill };
   }
@@ -650,8 +734,12 @@ export class EnemySquadron {
     );
   }
 
-  private buildSpawnList(fighters: number, interceptors: number): EnemyType[] {
+  private buildSpawnList(fighters: number, interceptors: number, includeAlpha: boolean): EnemyType[] {
     const list: EnemyType[] = [];
+    if (includeAlpha) {
+      list.push(EnemyType.AlphaWing);
+      fighters = Math.max(0, fighters - 1);
+    }
     for (let i = 0; i < fighters; i += 1) list.push(EnemyType.Fighter);
     for (let i = 0; i < interceptors; i += 1) list.push(EnemyType.Interceptor);
     return list;
@@ -677,7 +765,15 @@ export class EnemySquadron {
       if ('material' in obj && obj.material) {
         const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
         materials.forEach(mat => {
-          if (type === EnemyType.Interceptor) {
+          if (type === EnemyType.AlphaWing) {
+            if ('color' in mat && mat.color) {
+              mat.color.setRGB(0.45, 0.45, 0.45); // lighter grey hull
+            }
+            if ('emissive' in mat) {
+              mat.emissive?.setHex(0x2b2b2b);
+              mat.emissiveIntensity = 0.28;
+            }
+          } else if (type === EnemyType.Interceptor) {
             if ('color' in mat && mat.color) {
               mat.color.setRGB(0.38, 0.38, 0.38); // lighter dark grey
             }

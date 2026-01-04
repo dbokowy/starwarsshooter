@@ -443,9 +443,9 @@ function showControlsModal() {
   });
 }
 
-function onPlayerHit(): void {
+function onPlayerHit(damageMultiplier: number = 1): void {
   if (immortal) return;
-  const damage = PLAYER_CONFIG.maxHealth * 0.05; // 1/20th of max
+  const damage = PLAYER_CONFIG.maxHealth * 0.05 * damageMultiplier; // 1/20th of max
   const destroyed = player.takeDamage(damage);
   if (destroyed) {
     handlePlayerDestroyed();
@@ -517,7 +517,7 @@ function startGame(): void {
     window.clearTimeout(firstWaveTimer);
   }
   firstWaveTimer = window.setTimeout(async () => {
-    await enemies.reset(1, player, destroyer ? destroyer.position : undefined);
+    await enemies.reset(1, player, destroyer ? destroyer.position : undefined, 0, true);
     resetEnemyIcons(enemies.getEnemyTypes());
     enemies.setActive(true);
     enemies.setFireEnabled(true);
@@ -821,6 +821,9 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: (type: EnemyType) => void)
     const enemyRoots = enemies.getEnemyRoots();
     let collided = false;
     for (const root of enemyRoots) {
+      if (root.userData.enemyType === EnemyType.AlphaWing) {
+        continue;
+      }
       if (pos.distanceTo(root.position) <= ast.radius + 8) {
         const destroyedType = enemies.destroyEnemyByRoot(root);
         if (destroyedType) {
