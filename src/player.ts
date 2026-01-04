@@ -99,13 +99,14 @@ export class PlayerController {
     if (!this.boostPlayedThisHold && this.boostSound && this.boostAudio) {
       this.boostAudio.setVolume(0.5);
       this.boostAudio.setPlaybackRate(1.0);
-      const offset = 2.0; // start at 2s into clip
+      const offset = 0.7; // start at 0.7s into clip
       try {
         this.boostAudio.stop();
       } catch {
         /* ignore */
       }
-      this.boostAudio.play(0, offset);
+      this.boostAudio.offset = offset;
+      this.boostAudio.play();
       this.boostSource = this.boostAudio;
       this.boostPlayedThisHold = true;
       this.boostAudio.source?.addEventListener('ended', () => {
