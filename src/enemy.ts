@@ -26,6 +26,9 @@ type EnemyShip = {
   boundingRadius: number;
   hitFlash?: THREE.Sprite;
   hitFlashTimer: number;
+  arrivalSoundPlayed: boolean;
+  arrivalSoundDelayMs: number;
+  arrivalSoundDelayUntil?: number;
 };
 
 export type Obstacle = {
@@ -110,8 +113,11 @@ export class EnemySquadron {
   private readonly approachDuration = 3; // seconds to fly in from destroyer
   private active = false;
   private enemyFireSound?: AudioBuffer;
+  private enemyArrivalSound?: AudioBuffer;
   private listener?: THREE.AudioListener;
   private waveFireHoldUntil = 0;
+  private readonly arrivalSoundLeadMs = 2000; // play arrival sfx ~2s before reaching formation
+  private readonly arrivalSoundStaggerMs = 450; // wider stagger between ships to avoid overlap
   private readonly tmpVecA = new THREE.Vector3();
   private readonly tmpVecB = new THREE.Vector3();
   private readonly tmpVecC = new THREE.Vector3();
@@ -127,9 +133,10 @@ export class EnemySquadron {
     this.hitboxMultiplier = isMobile ? 0.6 : 0.3;
   }
 
-  setAudio(listener: THREE.AudioListener, fireSound: AudioBuffer): void {
+  setAudio(listener: THREE.AudioListener, fireSound: AudioBuffer, arrivalSound?: AudioBuffer): void {
     this.listener = listener;
     this.enemyFireSound = fireSound;
+    this.enemyArrivalSound = arrivalSound;
   }
 
   async init(count: number, player: PlayerController, formationOrigin?: THREE.Vector3, interceptors: number = 0): Promise<void> {
@@ -200,6 +207,8 @@ export class EnemySquadron {
         approachStart: startPos,
         approachTarget: targetPos,
         arrivalGraceUntil: 0,
+        arrivalSoundPlayed: false,
+        arrivalSoundDelayMs: i * this.arrivalSoundStaggerMs + Math.random() * 300,
         health: archetype.health,
         lastShot: performance.now() - Math.random() * 600,
         fireDelay: THREE.MathUtils.randFloat(archetype.fireDelayRange[0], archetype.fireDelayRange[1]),
@@ -224,6 +233,26 @@ export class EnemySquadron {
     this.bullets.length = 0;
     this.active = false;
     await this.init(count, player, formationOrigin, interceptors);
+  }
+
+  private playArrivalSound(enemy: EnemyShip): void {
+    if (!this.enemyArrivalSound || !this.listener) return;
+    if (enemy.arrivalSoundPlayed) return;
+    const now = performance.now();
+    if (!enemy.arrivalSoundDelayUntil) {
+      enemy.arrivalSoundDelayUntil = now + enemy.arrivalSoundDelayMs;
+      return;
+    }
+    if (now < enemy.arrivalSoundDelayUntil) return;
+    const audio = new THREE.PositionalAudio(this.listener);
+    audio.setBuffer(this.enemyArrivalSound);
+    audio.setRefDistance(140);
+    audio.setMaxDistance(900);
+    audio.setVolume(0.7);
+    enemy.root.add(audio);
+    audio.position.set(0, 0, 0);
+    audio.play();
+    enemy.arrivalSoundPlayed = true;
   }
 
   update(
@@ -277,10 +306,15 @@ export class EnemySquadron {
       const eased = THREE.MathUtils.smootherstep(enemy.approachProgress, 0, 1);
       enemy.root.position.lerpVectors(enemy.approachStart, enemy.approachTarget, eased);
       enemy.velocity.set(0, 0, 0);
+      const soundThreshold = Math.max(0, 1 - this.arrivalSoundLeadMs / (this.approachDuration * 1000));
+      if (enemy.approachProgress >= soundThreshold) {
+        this.playArrivalSound(enemy);
+      }
       return;
     }
     if (enemy.arrivalGraceUntil === 0) {
       enemy.arrivalGraceUntil = performance.now() + 3000; // grace period before first attack after arrival
+      this.playArrivalSound(enemy);
     }
 
     const desiredPos = this.tmpVecB.copy(baseTarget).add(wander);
@@ -419,7 +453,7 @@ export class EnemySquadron {
         const snd = new THREE.Audio(this.listener);
         snd.setBuffer(this.enemyFireSound);
         const distance = enemy.root.position.distanceTo(targetPos);
-        const volume = THREE.MathUtils.clamp(0.7 - distance / 500, 0.08, 0.7);
+        const volume = THREE.MathUtils.clamp((0.7 - distance / 500) * 3, 0.24, 1); // 3x louder overall
         snd.setVolume(volume);
         snd.setPlaybackRate(0.9 + Math.random() * 0.2);
         snd.play();

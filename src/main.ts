@@ -60,6 +60,13 @@ const tmpAimPoint = new THREE.Vector3();
 const tmpVerticalNudge = new THREE.Vector3();
 const tmpAimDir = new THREE.Vector3();
 const muzzleAverage = PLAYER_CONFIG.muzzleOffsets.reduce((acc, v) => acc.add(v), new THREE.Vector3()).multiplyScalar(1 / PLAYER_CONFIG.muzzleOffsets.length);
+let enemyFireSound: AudioBuffer | null = null;
+let enemyArrivalSound: AudioBuffer | null = null;
+const setEnemyAudioIfReady = (): void => {
+  if (enemyFireSound) {
+    enemies.setAudio(listener, enemyFireSound, enemyArrivalSound ?? undefined);
+  }
+};
 
 const enemyIconsContainer = document.getElementById('enemy-icons') as HTMLElement | null;
 const enemyIconsEl = document.getElementById('enemy-icons-list') as HTMLElement | null;
@@ -73,7 +80,7 @@ const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElemen
 const loadingTipEl = document.querySelector('.loading-tip') as HTMLElement | null;
 const LOADING_TIPS = [
   'Przy dużej liczbie wrogów dobrze jest schować się w pasie asteroidów',
-  'Podczas manewru beczki masz 70% mniej szans na trafienie',
+  'Podczas manewru beczki mysliwce wroga maja 70% mniej szans na trafienie ciebie',
   'Statki wroga typu TIE Interceptor sa szybsze i zwrotniejsze od myśliwców TIE Fighter',
   'Boost przyspieszenia powyżej 70% zwiększa dwukrotnie prędkość X-winga i ma 10 sekundowy cooldown'
 ];
@@ -168,9 +175,16 @@ async function init() {
     destroyer = await loadStarDestroyer(loader, scene, ASSETS_PATH);
   }
   await spawnAsteroids(200);
-  audioLoader.load(`${ASSETS_PATH}/tie-fighter-fire-1.mp3`, buffer => {
+  audioLoader.load(`${ASSETS_PATH}/xwing_shots.mp3`, buffer => {
     player.setFireSound(buffer);
-    enemies.setAudio(listener, buffer);
+  });
+  audioLoader.load(`${ASSETS_PATH}/tie-fighter-fire-1.mp3`, buffer => {
+    enemyFireSound = buffer;
+    setEnemyAudioIfReady();
+  });
+  audioLoader.load(`${ASSETS_PATH}/tie-arrival.ogg`, buffer => {
+    enemyArrivalSound = buffer;
+    setEnemyAudioIfReady();
   });
   audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => player.setHitSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/xwing_boost.ogg`, buffer => player.setBoostSound(buffer));
