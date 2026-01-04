@@ -18,9 +18,13 @@ export function createInputController(target: HTMLElement, onShoot: () => void):
     up: false,
     down: false,
     boost: false,
+    overboost: false,
     rollLeft: false,
     rollRight: false
   };
+
+  let lastShiftPressAt = -Infinity;
+  const shiftDoubleTapMs = 320;
 
   const handleKey = (event: KeyboardEvent, isDown: boolean) => {
     switch (event.code) {
@@ -54,7 +58,18 @@ export function createInputController(target: HTMLElement, onShoot: () => void):
         break;
       case 'ShiftLeft':
       case 'ShiftRight':
+        if (isDown && event.repeat) return;
+        if (isDown && !state.boost) {
+          const now = performance.now();
+          if (now - lastShiftPressAt <= shiftDoubleTapMs) {
+            state.overboost = true;
+          }
+          lastShiftPressAt = now;
+        }
         state.boost = isDown;
+        if (!isDown) {
+          state.overboost = false;
+        }
         break;
       case 'KeyQ':
         state.rollLeft = isDown;
@@ -314,6 +329,7 @@ function resetState(state: InputState): void {
   state.up = false;
   state.down = false;
   state.boost = false;
+  state.overboost = false;
   state.rollLeft = false;
   state.rollRight = false;
 }

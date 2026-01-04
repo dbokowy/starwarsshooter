@@ -464,6 +464,14 @@ canvas {
   box-shadow: 0 0 24px var(--glow, rgba(255, 123, 84, 0.4)), inset 0 0 10px rgba(255, 255, 255, 0.12);
 }
 
+.bar-fill.speed.speed-warning {
+  background: linear-gradient(90deg, rgba(170, 24, 12, 0.95), var(--accent, var(--speed-accent)));
+}
+
+.bar-fill.speed.speed-warning-blink {
+  animation: speed-overboost-blink 0.5s ease-in-out infinite;
+}
+
 .bar-fill.speed.regen {
   background: linear-gradient(90deg, rgba(255, 200, 140, 0.5), rgba(255, 220, 180, 0.35));
   box-shadow: 0 0 18px rgba(255, 200, 140, 0.3), inset 0 0 6px rgba(255, 255, 255, 0.18);
@@ -484,6 +492,21 @@ canvas {
   }
   100% {
     opacity: 0.35;
+  }
+}
+
+@keyframes speed-overboost-blink {
+  0% {
+    filter: drop-shadow(0 0 6px rgba(255, 220, 140, 0.3));
+    opacity: 0.7;
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(255, 240, 200, 0.85));
+    opacity: 1;
+  }
+  100% {
+    filter: drop-shadow(0 0 6px rgba(255, 220, 140, 0.3));
+    opacity: 0.7;
   }
 }
 

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 import { CameraRig, PlayArea, PlayerConfig } from './types.js';
 
 export const ASSETS_PATH = `${import.meta.env.BASE_URL}assets`;
@@ -20,7 +20,7 @@ export const PLAY_AREA: PlayArea = {
 export const PLAYER_CONFIG: PlayerConfig = {
   baseSpeed: 4.6,
   strafeSpeed: 18,
-  boostMultiplier: 14.2857142857, // raw boost; 70%≈10x, ramps to ~20x top speed
+  boostMultiplier: 26.0869565217, // baseSpeed * boostMultiplier = 120 max cruise
   maxHealth: 100,
   muzzleOffsets: [
     new THREE.Vector3(6.6, 1.4, -3.2),   // upper right wingtip
@@ -35,3 +35,5 @@ export const PLAYER_CONFIG: PlayerConfig = {
     new THREE.Vector3(2.4, -0.2, 4.8)
   ]
 };
+
+

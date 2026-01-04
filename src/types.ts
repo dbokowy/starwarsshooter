@@ -10,6 +10,7 @@ export type InputState = {
   up: boolean;
   down: boolean;
   boost: boolean;
+  overboost: boolean;
   rollLeft: boolean;
   rollRight: boolean;
 };

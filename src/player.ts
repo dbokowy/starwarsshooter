@@ -99,7 +99,7 @@ export class PlayerController {
     const boostFraction = this.currentSpeed / (this.config.baseSpeed * this.config.boostMultiplier);
     const aboveThreshold = boostFraction >= 0.7;
 
-    if (!input.boost || !aboveThreshold) {
+    if (!input.overboost || !aboveThreshold) {
       if (this.boostSource) {
         this.boostSource.stop();
         this.boostSource = null;
@@ -488,7 +488,7 @@ export class PlayerController {
   }
 
   private updateSpeed(delta: number, input: InputState): void {
-    const targetSpeed = input.boost ? 180 : this.config.baseSpeed;
+    const targetSpeed = input.overboost ? 180 : input.boost ? 120 : this.config.baseSpeed;
     const isDecel = targetSpeed < this.currentSpeed;
     const accelRate = isDecel ? 1.8 : 0.9; // quicker slowdown, moderate accel up
     const baseSmoothing = 1 - Math.exp(-accelRate * delta);
