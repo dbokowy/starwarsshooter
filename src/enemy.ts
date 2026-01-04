@@ -22,6 +22,8 @@ type EnemyShip = {
   health: number;
   lastShot: number;
   fireDelay: number;
+  burstShotsLeft: number;
+  nextBurstShotAt: number;
   healthBar: { group: THREE.Object3D; fill: THREE.Mesh };
   boundingRadius: number;
   hitFlash?: THREE.Sprite;
@@ -73,7 +75,7 @@ export class EnemySquadron {
       muzzleOffsets: [new THREE.Vector3(1.8, -0.2, -2.6), new THREE.Vector3(-1.8, -0.2, -2.6)],
       bulletSpeed: 260,
       bulletLife: 4,
-      fireDelayRange: [400, 675], // 2x more frequent fire
+      fireDelayRange: [800, 1350], // 2x less frequent fire
       health: 3,
       speedTarget: 170,
       maxSpeed: 230,
@@ -93,7 +95,7 @@ export class EnemySquadron {
       ],
       bulletSpeed: 270,
       bulletLife: 4,
-      fireDelayRange: [350, 600], // 2x more frequent fire
+      fireDelayRange: [700, 1200], // 2x less frequent fire
       health: 3,
       speedTarget: 170 * 1.2,
       maxSpeed: 230 * 1.2,
@@ -118,6 +120,7 @@ export class EnemySquadron {
   private listener?: THREE.AudioListener;
   private waveFireHoldUntil = 0;
   private readonly arrivalSoundLeadMs = 2000; // play arrival sfx ~2s before reaching formation
+  private readonly burstIntervalRange: [number, number] = [300, 400];
   private readonly arrivalSoundStaggerMs = 450; // wider stagger between ships to avoid overlap
   private readonly tmpWander = new THREE.Vector3();
   private readonly tmpVecA = new THREE.Vector3();
@@ -215,6 +218,8 @@ export class EnemySquadron {
         health: archetype.health,
         lastShot: performance.now() - Math.random() * 600,
         fireDelay: THREE.MathUtils.randFloat(archetype.fireDelayRange[0], archetype.fireDelayRange[1]),
+        burstShotsLeft: 0,
+        nextBurstShotAt: 0,
         healthBar,
         boundingRadius: baseRadius,
         hitFlash,
@@ -370,17 +375,32 @@ export class EnemySquadron {
     if (enemy.approachProgress < 1) return; // don't fire until in position
     if (now < this.waveFireHoldUntil) return; // pause fire for first seconds of each wave
     if (enemy.arrivalGraceUntil && now < enemy.arrivalGraceUntil) return; // grace window right after arrival
+
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(enemy.root.quaternion);
+    if (enemy.burstShotsLeft > 0) {
+      if (now < enemy.nextBurstShotAt) return;
+      this.spawnLaser(enemy, forward, playerPos);
+      enemy.burstShotsLeft -= 1;
+      enemy.nextBurstShotAt = now + THREE.MathUtils.randFloat(this.burstIntervalRange[0], this.burstIntervalRange[1]);
+      if (enemy.burstShotsLeft <= 0) {
+        enemy.lastShot = now;
+        enemy.fireDelay = THREE.MathUtils.randFloat(enemy.archetype.fireDelayRange[0], enemy.archetype.fireDelayRange[1]);
+      }
+      return;
+    }
+
     const timeSinceLast = now - enemy.lastShot;
     if (timeSinceLast < enemy.fireDelay) return;
 
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(enemy.root.quaternion);
     const toPlayer = playerPos.clone().sub(enemy.root.position).normalize();
     const aimDot = forward.dot(toPlayer);
     if (aimDot < 0.78) return; // only fire when mostly facing the player
 
-    enemy.lastShot = now;
-    enemy.fireDelay = THREE.MathUtils.randFloat(enemy.archetype.fireDelayRange[0], enemy.archetype.fireDelayRange[1]);
+    enemy.burstShotsLeft = THREE.MathUtils.randInt(2, 3);
+    enemy.nextBurstShotAt = now;
     this.spawnLaser(enemy, forward, playerPos);
+    enemy.burstShotsLeft -= 1;
+    enemy.nextBurstShotAt = now + THREE.MathUtils.randFloat(this.burstIntervalRange[0], this.burstIntervalRange[1]);
   }
 
   setFireEnabled(enabled: boolean): void {

@@ -515,13 +515,13 @@ export class PlayerController {
     const pitchIntent = (input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0);
     const verticalIntent = THREE.MathUtils.clamp(pitchIntent, -1, 1); // flame length tied to W/S input, not motion direction
 
-    const yawTarget = this.root.rotation.y + yawIntent * -delta * 1.85; // more responsive yaw
-    const pitchTargetUnclamped = this.root.rotation.x + pitchIntent * delta * 1.5;
+    const yawTarget = this.root.rotation.y + yawIntent * -delta * 2.59; // more responsive yaw
+    const pitchTargetUnclamped = this.root.rotation.x + pitchIntent * delta * 2.1;
     const maxPitch = Math.PI / 3 + THREE.MathUtils.degToRad(15); // allow an extra 15 deg up/down
     const pitchTarget = THREE.MathUtils.clamp(pitchTargetUnclamped, -maxPitch, maxPitch);
 
-    const yawSmooth = 1 - Math.exp(-14 * delta); // faster blend toward target yaw
-    const pitchSmooth = 1 - Math.exp(-8 * delta);
+    const yawSmooth = 1 - Math.exp(-16.8 * delta); // faster blend toward target yaw
+    const pitchSmooth = 1 - Math.exp(-11.2 * delta);
     this.root.rotation.y = THREE.MathUtils.lerp(this.root.rotation.y, yawTarget, yawSmooth);
     this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, pitchTarget, pitchSmooth);
 
