@@ -34,6 +34,7 @@ type EnemyShip = {
   idleUntil: number;
   focusLocked: boolean;
   justArrived: boolean;
+  arrivalTimestamp: number;
   arrivalSoundPlayed: boolean;
   arrivalSoundDelayMs: number;
   arrivalSoundDelayUntil?: number;
@@ -153,6 +154,7 @@ export class EnemySquadron {
   private readonly arrivalSoundLeadMs = 2000; // play arrival sfx ~2s before reaching formation
   private readonly burstIntervalRange: [number, number] = [180, 260];
   private readonly arrivalSoundStaggerMs = 450; // wider stagger between ships to avoid overlap
+  private readonly justArrivedWindowMs = 5000;
   private readonly tmpWander = new THREE.Vector3();
   private readonly tmpVecA = new THREE.Vector3();
   private readonly tmpVecB = new THREE.Vector3();
@@ -280,7 +282,8 @@ export class EnemySquadron {
         hitFlashTimer: 0,
         idleUntil: 0,
         focusLocked: false,
-        justArrived: false
+        justArrived: false,
+        arrivalTimestamp: 0
       });
     }
   }
@@ -341,6 +344,9 @@ export class EnemySquadron {
 
     for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
       const enemy = this.enemies[i];
+      if (enemy.justArrived && enemy.arrivalTimestamp > 0 && now - enemy.arrivalTimestamp > this.justArrivedWindowMs) {
+        enemy.justArrived = false;
+      }
       const isIdle = enemy.idleUntil > now;
       if (!isIdle) {
         this.updateMovement(enemy, delta, playerPos, obstacles);
@@ -388,6 +394,7 @@ export class EnemySquadron {
       enemy.approachProgress = Math.min(1, enemy.approachProgress + delta / this.approachDuration);
       if (prevProgress < 1 && enemy.approachProgress >= 1) {
         enemy.justArrived = true;
+        enemy.arrivalTimestamp = performance.now();
       }
       const eased = THREE.MathUtils.smootherstep(enemy.approachProgress, 0, 1);
       enemy.root.position.lerpVectors(enemy.approachStart, enemy.approachTarget, eased);
@@ -667,6 +674,7 @@ export class EnemySquadron {
 
   private updateHealthBar(enemy: EnemyShip, camera: THREE.Camera, target: THREE.Vector3): void {
     const baseY = enemy.boundingRadius * 0.8 + 2.2;
+    enemy.healthBar.group.visible = true;
     enemy.healthBar.group.position.setY(baseY);
     if (!camera.up.equals(this.worldUp)) {
       this.tmpQuatA.copy(camera.quaternion);
@@ -678,6 +686,7 @@ export class EnemySquadron {
     }
     this.updateHealthFill(enemy);
     if (enemy.shieldBar) {
+      enemy.shieldBar.group.visible = true;
       enemy.shieldBar.group.position.setY(baseY + 1.4);
       if (!camera.up.equals(this.worldUp)) {
         this.tmpQuatA.copy(camera.quaternion);

@@ -733,6 +733,7 @@ body.roll-blur canvas {
   right: 64px;
   display: flex;
   gap: 10px;
+  align-items: center;
   z-index: 25;
 }
 
@@ -753,6 +754,30 @@ body.roll-blur canvas {
   color: #041019;
   border-color: rgba(94, 203, 255, 0.8);
   box-shadow: 0 8px 18px rgba(15, 208, 255, 0.4);
+}
+
+.dev-wave-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dev-wave-label {
+  font-size: 11px;
+  color: #bfe7ff;
+  letter-spacing: 0.05em;
+}
+
+.dev-select {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(94, 203, 255, 0.4);
+  background: rgba(5, 12, 24, 0.8);
+  color: #e5f6ff;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  outline: none;
 }
 
 body.is-touch #debug-toggles {

@@ -106,6 +106,7 @@ const controlsModal = document.getElementById('controls-modal') as HTMLElement |
 const controlsCloseBtn = document.getElementById('controls-close') as HTMLButtonElement | null;
 const fpsEl = document.getElementById('dev-fps') as HTMLElement | null;
 let devUiVisible = false;
+let forcedNextWave: number | null = null;
 const toggleDevUi = (visible: boolean) => {
   devUiVisible = visible;
   if (immortalityBtn) immortalityBtn.style.display = visible ? 'inline-flex' : 'none';
@@ -114,6 +115,7 @@ const toggleDevUi = (visible: boolean) => {
   if (asteroidHighlightBtn) asteroidHighlightBtn.style.display = visible ? 'inline-flex' : 'none';
   if (asteroidExplosionBtn) asteroidExplosionBtn.style.display = visible ? 'inline-flex' : 'none';
   if (musicToggleBtn) musicToggleBtn.style.display = visible ? 'inline-flex' : 'none';
+  if (nextWaveControls) nextWaveControls.style.display = visible ? 'inline-flex' : 'none';
   if (fpsEl) fpsEl.style.display = visible ? 'block' : 'none';
 };
 const devToggleHandler = (event: KeyboardEvent) => {
@@ -127,6 +129,9 @@ const enemyExplosionBtn = document.getElementById('trigger-enemy-explosion') as 
 const asteroidHighlightBtn = document.getElementById('toggle-asteroid-highlight') as HTMLButtonElement | null;
 const asteroidExplosionBtn = document.getElementById('trigger-asteroid-explosion') as HTMLButtonElement | null;
 const musicToggleBtn = document.getElementById('toggle-music') as HTMLButtonElement | null;
+const nextWaveControls = document.getElementById('next-wave-controls') as HTMLDivElement | null;
+const nextWaveSelect = document.getElementById('next-wave-select') as HTMLSelectElement | null;
+const nextWaveBtn = document.getElementById('set-next-wave') as HTMLButtonElement | null;
 const resultModal = document.getElementById('result-modal') as HTMLElement | null;
 const resultMessage = document.getElementById('result-message') as HTMLElement | null;
 const resultRetryBtn = document.getElementById('result-retry') as HTMLButtonElement | null;
@@ -595,6 +600,13 @@ function onEnemyDestroyed(type: EnemyType): void {
 }
 
 function startGame(): void {
+  seenEnemyTypes.clear();
+  pendingFocusTypes = [];
+  forcedNextWave = null;
+  if (nextWaveBtn) {
+    nextWaveBtn.textContent = 'Nastepna fala: AUTO';
+    nextWaveBtn.classList.remove('active');
+  }
   gameStarted = true;
   if (!loopStarted) {
     clock.start(); // reset delta so first frame isn't huge
@@ -718,6 +730,18 @@ function bindToggles(): void {
     musicToggleBtn.textContent = 'Muzyka: ON';
     musicToggleBtn.classList.add('active');
   }
+
+  if (nextWaveBtn && nextWaveSelect) {
+    nextWaveBtn.addEventListener('click', () => {
+      const value = Number.parseInt(nextWaveSelect.value, 10);
+      if (Number.isNaN(value)) return;
+      forcedNextWave = Math.max(1, Math.min(6, value));
+      nextWaveBtn.textContent = `Nastepna fala: ${forcedNextWave}`;
+      nextWaveBtn.classList.add('active');
+    });
+    nextWaveBtn.textContent = 'Nastepna fala: AUTO';
+    nextWaveBtn.classList.remove('active');
+  }
 }
 
 function handlePlayerDestroyed(skipExplosion: boolean = false): void {
@@ -757,20 +781,25 @@ function scheduleNextWave(fighters: number, interceptors: number = 0, includeAlp
 }
 
 async function advanceWave(): Promise<void> {
+  const nextWave = forcedNextWave ?? wave + 1;
+  forcedNextWave = null;
+  if (nextWaveBtn) {
+    nextWaveBtn.textContent = 'Nastepna fala: AUTO';
+    nextWaveBtn.classList.remove('active');
+  }
+
+  wave = Math.max(1, Math.min(6, nextWave));
   if (wave === 1) {
-    wave = 2;
-    scheduleNextWave(2); // 2 Fighters
+    scheduleNextWave(1); // 1 Fighter
   } else if (wave === 2) {
-    wave = 3;
-    scheduleNextWave(3); // 3 Fighters
+    scheduleNextWave(2); // 2 Fighters
   } else if (wave === 3) {
-    wave = 4;
-    scheduleNextWave(2, 1); // 2 Fighters + 1 Interceptor
+    scheduleNextWave(3); // 3 Fighters
   } else if (wave === 4) {
-    wave = 5;
-    scheduleNextWave(2, 2); // 2 Fighters + 2 Interceptors
+    scheduleNextWave(2, 1); // 2 Fighters + 1 Interceptor
   } else if (wave === 5) {
-    wave = 6;
+    scheduleNextWave(2, 2); // 2 Fighters + 2 Interceptors
+  } else if (wave === 6) {
     scheduleNextWave(0, 2, true); // TIE-1 (Alpha) + 2 Interceptors
   } else {
     handleVictory();
