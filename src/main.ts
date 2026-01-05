@@ -23,6 +23,16 @@ const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerH
 const listener = new AudioListener();
 camera.add(listener);
 scene.add(camera);
+const presentationKeyLight = new THREE.SpotLight(0xffffff, 0, 620, Math.PI / 5, 0.35, 1.1);
+const presentationFillLight = new THREE.PointLight(0xbfd7ff, 0, 520, 2);
+const presentationRimLight = new THREE.PointLight(0xffffff, 0, 520, 2);
+presentationKeyLight.castShadow = false;
+presentationFillLight.castShadow = false;
+presentationRimLight.castShadow = false;
+scene.add(presentationKeyLight);
+scene.add(presentationKeyLight.target);
+scene.add(presentationFillLight);
+scene.add(presentationRimLight);
 const clock = new THREE.Clock();
 const loader = new GLTFLoader(loadingManager);
 const audioLoader = new AudioLoader(loadingManager);
@@ -123,6 +133,7 @@ let immortal = false;
 let gameStarted = false;
 let winPending = false;
 let winTimer: number | null = null;
+let regenTimer: number | null = null;
 let firstWaveTimer: number | null = null;
 let wave = 1;
 let enemiesTotal = 0;
@@ -130,7 +141,13 @@ let enemiesDestroyed = 0;
 let loopStarted = false;
 let arrivalFocusUntil = 0;
 let arrivalFocusTarget: THREE.Vector3 | null = null;
+let arrivalFocusCamera: THREE.Vector3 | null = null;
+let arrivalFocusUp: THREE.Vector3 | null = null;
+let arrivalFocusQueued: { lookTarget: THREE.Vector3; cameraPos: THREE.Vector3; cameraUp: THREE.Vector3 } | null = null;
+const seenEnemyTypes = new Set<EnemyType>();
+let pendingFocusTypes: EnemyType[] = [];
 const ARRIVAL_CAMERA_MS = 2500;
+const ALPHA_FOCUS_MS = 4000;
 
 const smoothedLook = new THREE.Vector3();
 const inputController = createInputController(renderer.domElement, () => player.shoot(performance.now()));
@@ -141,12 +158,16 @@ function setArrivalFocusFromEnemies(): void {
   const roots = enemies.getEnemyRoots();
   if (!roots.length) {
     arrivalFocusTarget = destroyer ? destroyer.position.clone() : null;
+    arrivalFocusCamera = null;
+    arrivalFocusUp = null;
     arrivalFocusUntil = performance.now() + ARRIVAL_CAMERA_MS;
     return;
   }
   const centroid = roots.reduce((acc, obj) => acc.add(obj.position), new THREE.Vector3());
   centroid.multiplyScalar(1 / roots.length);
   arrivalFocusTarget = centroid;
+  arrivalFocusCamera = null;
+  arrivalFocusUp = null;
   arrivalFocusUntil = performance.now() + ARRIVAL_CAMERA_MS;
 }
 
@@ -238,6 +259,27 @@ function update() {
   player.updateBullets(delta);
   if (gameStarted && !player.isDestroyed()) {
     enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit, onEnemyDestroyed);
+    const typeFocusTarget = pendingFocusTypes.length
+      ? enemies.triggerNewTypeFocus(now, ALPHA_FOCUS_MS, pendingFocusTypes)
+      : null;
+    if (typeFocusTarget) {
+      pendingFocusTypes = pendingFocusTypes.filter(type => type !== typeFocusTarget.type);
+      if (now < arrivalFocusUntil) {
+        arrivalFocusQueued = typeFocusTarget;
+      } else {
+        arrivalFocusTarget = typeFocusTarget.lookTarget;
+        arrivalFocusCamera = typeFocusTarget.cameraPos;
+        arrivalFocusUp = typeFocusTarget.cameraUp;
+        arrivalFocusUntil = now + ALPHA_FOCUS_MS;
+      }
+    }
+    if (arrivalFocusQueued && now >= arrivalFocusUntil) {
+      arrivalFocusTarget = arrivalFocusQueued.lookTarget;
+      arrivalFocusCamera = arrivalFocusQueued.cameraPos;
+      arrivalFocusUp = arrivalFocusQueued.cameraUp;
+      arrivalFocusUntil = now + ALPHA_FOCUS_MS;
+      arrivalFocusQueued = null;
+    }
   }
   updateCamera();
   player.updateFlames(elapsed * 2); // match prior timing scale
@@ -272,13 +314,49 @@ function updateCamera() {
   const offset = tmpCamOffset.copy(rigOffsets.cameraOffset).multiplyScalar(cameraPullback);
 
   const desiredPosition = offset.applyQuaternion(player.root.quaternion).add(player.root.position);
-  camera.position.lerp(desiredPosition, 0.12);
+  let cameraTargetPosition = desiredPosition;
 
   const now = performance.now();
   let lookTarget = tmpLookTarget.copy(rigOffsets.lookOffset).applyQuaternion(player.root.quaternion).add(player.root.position);
   if (arrivalFocusTarget && now < arrivalFocusUntil) {
+    if (arrivalFocusCamera) {
+      cameraTargetPosition = arrivalFocusCamera;
+    }
+    if (arrivalFocusUp) {
+      camera.up.copy(arrivalFocusUp);
+    } else {
+      camera.up.set(0, 1, 0);
+    }
     lookTarget = tmpLookTarget.copy(arrivalFocusTarget);
+    if (arrivalFocusCamera) {
+      presentationKeyLight.visible = true;
+      presentationFillLight.visible = true;
+      presentationRimLight.visible = true;
+      presentationKeyLight.intensity = 2.2;
+      presentationFillLight.intensity = 0.4;
+      presentationRimLight.intensity = 1.1;
+      presentationKeyLight.position.copy(lookTarget).add(new THREE.Vector3(0, 220, 60));
+      presentationKeyLight.target.position.copy(lookTarget);
+      presentationFillLight.position.copy(lookTarget).add(new THREE.Vector3(120, 40, 80));
+      presentationRimLight.position.copy(lookTarget).add(new THREE.Vector3(0, 60, -160));
+    } else {
+      presentationKeyLight.visible = false;
+      presentationFillLight.visible = false;
+      presentationRimLight.visible = false;
+      presentationKeyLight.intensity = 0;
+      presentationFillLight.intensity = 0;
+      presentationRimLight.intensity = 0;
+    }
+  } else {
+    camera.up.set(0, 1, 0);
+    presentationKeyLight.visible = false;
+    presentationFillLight.visible = false;
+    presentationRimLight.visible = false;
+    presentationKeyLight.intensity = 0;
+    presentationFillLight.intensity = 0;
+    presentationRimLight.intensity = 0;
   }
+  camera.position.lerp(cameraTargetPosition, 0.12);
   smoothedLook.lerp(lookTarget, 0.2);
   camera.lookAt(smoothedLook);
 
@@ -470,6 +548,8 @@ function resetEnemyIcons(types: EnemyType[]): void {
   }
   enemiesTotal = types.length;
   enemiesDestroyed = 0;
+  pendingFocusTypes = types.filter(type => !seenEnemyTypes.has(type));
+  pendingFocusTypes.forEach(type => seenEnemyTypes.add(type));
   if (!enemyIconsEl) return;
   enemyIconsEl.innerHTML = '';
   types.forEach(type => {
@@ -517,7 +597,7 @@ function startGame(): void {
     window.clearTimeout(firstWaveTimer);
   }
   firstWaveTimer = window.setTimeout(async () => {
-    await enemies.reset(1, player, destroyer ? destroyer.position : undefined, 0, true);
+    await enemies.reset(1, player, destroyer ? destroyer.position : undefined, 0, false);
     resetEnemyIcons(enemies.getEnemyTypes());
     enemies.setActive(true);
     enemies.setFireEnabled(true);
@@ -548,6 +628,10 @@ function clearWinTimer(): void {
   if (winTimer !== null) {
     window.clearTimeout(winTimer);
     winTimer = null;
+  }
+  if (regenTimer !== null) {
+    window.clearTimeout(regenTimer);
+    regenTimer = null;
   }
 }
 
@@ -645,11 +729,15 @@ function handleVictory(): void {
   showResult('Zwyciestwo', false);
 }
 
-function scheduleNextWave(fighters: number, interceptors: number = 0): void {
+function scheduleNextWave(fighters: number, interceptors: number = 0, includeAlpha: boolean = false): void {
   clearWinTimer();
-  winTimer = window.setTimeout(async () => {
+  const waveDelayMs = 10000;
+  const regenLeadMs = 3000;
+  regenTimer = window.setTimeout(() => {
     player.fullyHeal();
-    await enemies.reset(fighters, player, destroyer ? destroyer.position : undefined, interceptors);
+  }, Math.max(0, waveDelayMs - regenLeadMs));
+  winTimer = window.setTimeout(async () => {
+    await enemies.reset(fighters, player, destroyer ? destroyer.position : undefined, interceptors, includeAlpha);
     resetEnemyIcons(enemies.getEnemyTypes());
     enemies.setActive(true);
     enemies.setFireEnabled(true);
@@ -669,10 +757,10 @@ async function advanceWave(): Promise<void> {
     scheduleNextWave(2, 1); // 2 Fighters + 1 Interceptor
   } else if (wave === 4) {
     wave = 5;
-    scheduleNextWave(3, 1); // 3 Fighters + 1 Interceptor
+    scheduleNextWave(2, 2); // 2 Fighters + 2 Interceptors
   } else if (wave === 5) {
     wave = 6;
-    scheduleNextWave(3, 2); // 3 Fighters + 2 Interceptors
+    scheduleNextWave(0, 2, true); // TIE-1 (Alpha) + 2 Interceptors
   } else {
     handleVictory();
   }

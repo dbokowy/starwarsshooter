@@ -67,6 +67,9 @@ export class PlayerController {
   private hitFlash?: THREE.Mesh;
   private hitFlashTimer = 0;
   private readonly hitFlashDuration = 0.35;
+  private shieldFlash?: THREE.Sprite;
+  private shieldFlashTimer = 0;
+  private readonly shieldFlashDuration = 0.6;
   private hitSoundBuffer: AudioBuffer | null = null;
   private shieldRegenSoundBuffer: AudioBuffer | null = null;
   private wingTrails: THREE.Mesh[] = [];
@@ -203,6 +206,9 @@ export class PlayerController {
     const wasBelowMax = this.health < this.config.maxHealth;
     this.health = this.config.maxHealth;
     this.hitFlashTimer = 0;
+    if (wasBelowMax) {
+      this.shieldFlashTimer = this.shieldFlashDuration;
+    }
     if (wasBelowMax && this.shieldRegenSoundBuffer) {
       const regenSound = new THREE.Audio(this.listener);
       regenSound.setBuffer(this.shieldRegenSoundBuffer);
@@ -222,6 +228,7 @@ export class PlayerController {
     this.root.add(model);
     this.engineFlames.attach(); // keep previous relative offsets (parented to root)
     this.addHitFlash();
+    this.addShieldFlash();
     this.addWingTrails();
   }
 
@@ -266,6 +273,7 @@ export class PlayerController {
     if (!this.model || !this.model.userData.baseRotation) return;
     this.model.rotation.copy(this.model.userData.baseRotation);
     this.updateHitFlash();
+    this.updateShieldFlash();
   }
 
   shoot(now: number): void {
@@ -431,6 +439,26 @@ export class PlayerController {
     this.hitFlash = flash;
   }
 
+  private addShieldFlash(): void {
+    const material = new THREE.SpriteMaterial({
+      map: this.getShieldFlashTexture(),
+      color: 0x6cc6ff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
+      fog: false
+    });
+    const flash = new THREE.Sprite(material);
+    const size = 9.4; // larger surface bloom for shield regen
+    flash.scale.set(size, size, 1);
+    flash.name = 'shield-flash';
+    flash.renderOrder = 45;
+    this.root.add(flash);
+    this.shieldFlash = flash;
+  }
+
   private updateHitFlash(): void {
     if (!this.hitFlash) return;
     if (this.hitFlashTimer <= 0) {
@@ -447,6 +475,24 @@ export class PlayerController {
     this.tmpDir.set(0, 0, 1).applyQuaternion(this.root.quaternion);
     this.hitFlash.position.copy(this.tmpDir).multiplyScalar(2.2);
     this.hitFlash.lookAt(this.hitFlash.position.clone().add(this.tmpDir));
+  }
+
+  private updateShieldFlash(): void {
+    if (!this.shieldFlash) return;
+    if (this.shieldFlashTimer <= 0) {
+      this.shieldFlash.visible = false;
+      return;
+    }
+    this.shieldFlashTimer = Math.max(0, this.shieldFlashTimer - 1 / 60);
+    const t = 1 - this.shieldFlashTimer / this.shieldFlashDuration;
+    const material = this.shieldFlash.material as THREE.SpriteMaterial;
+    const opacity = THREE.MathUtils.lerp(0.7, 0, t);
+    material.opacity = opacity;
+    this.shieldFlash.visible = opacity > 0;
+
+    this.tmpDir.set(0, 0, 1).applyQuaternion(this.root.quaternion);
+    this.shieldFlash.position.copy(this.tmpDir).multiplyScalar(2.6);
+    this.shieldFlash.lookAt(this.shieldFlash.position.clone().add(this.tmpDir));
   }
 
   private getHitFlashTexture(): THREE.Texture {
@@ -469,6 +515,27 @@ export class PlayerController {
     this.hitFlashTexture.magFilter = THREE.LinearFilter;
     this.hitFlashTexture.wrapS = this.hitFlashTexture.wrapT = THREE.ClampToEdgeWrapping;
     return this.hitFlashTexture;
+  }
+
+  private getShieldFlashTexture(): THREE.Texture {
+    const size = 96;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.15, size / 2, size / 2, size * 0.6);
+      gradient.addColorStop(0, 'rgba(170,230,255,0.95)');
+      gradient.addColorStop(0.35, 'rgba(108,198,255,0.5)');
+      gradient.addColorStop(1, 'rgba(108,198,255,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    return texture;
   }
 
   private addWingTrails(): void {

@@ -1,0 +1,11 @@
+Model Information:
+* title:	TIE Advanced x1 (Vader's TIE) - Star Wars
+* source:	https://sketchfab.com/3d-models/tie-advanced-x1-vaders-tie-star-wars-98f1decbda5c48aea22a11c7ddd62a7b
+* author:	Quiznos323 (https://sketchfab.com/quiznos323)
+
+Model License:
+* license type:	CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
+* requirements:	Author must be credited. No commercial use. Modified versions must have the same license.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "TIE Advanced x1 (Vader's TIE) - Star Wars" (https://sketchfab.com/3d-models/tie-advanced-x1-vaders-tie-star-wars-98f1decbda5c48aea22a11c7ddd62a7b) by Quiznos323 (https://sketchfab.com/quiznos323) licensed under CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)

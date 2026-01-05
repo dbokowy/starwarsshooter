@@ -31,6 +31,9 @@ type EnemyShip = {
   boundingRadius: number;
   hitFlash?: THREE.Sprite;
   hitFlashTimer: number;
+  idleUntil: number;
+  focusLocked: boolean;
+  justArrived: boolean;
   arrivalSoundPlayed: boolean;
   arrivalSoundDelayMs: number;
   arrivalSoundDelayUntil?: number;
@@ -113,20 +116,25 @@ export class EnemySquadron {
       sizeTarget: 12
     },
     [EnemyType.AlphaWing]: {
-      modelPath: 'star_wars_alpha-class_xg-1_star_wing/scene.gltf',
-      muzzleOffsets: [new THREE.Vector3(1.9, -0.2, -2.8), new THREE.Vector3(-1.9, -0.2, -2.8)],
+      modelPath: 'tie_advanced_x1_vaders_tie_-_star_wars/scene.gltf',
+      muzzleOffsets: [
+        new THREE.Vector3(1.7, 0.25, -2.6),
+        new THREE.Vector3(-1.7, 0.25, -2.6),
+        new THREE.Vector3(1.7, -0.35, -2.6),
+        new THREE.Vector3(-1.7, -0.35, -2.6)
+      ],
       bulletSpeed: 260,
       bulletLife: 4,
       fireDelayRange: [900, 1400],
       damageMultiplier: 2,
-      health: 6,
+      health: 12,
       speedTarget: 170,
       maxSpeed: 230,
       maxAccel: 130,
       aimSpread: 0.36,
       wanderSpeedRange: [0.6, 1.4],
       collisionFailChance: 0.08,
-      sizeTarget: 13
+      sizeTarget: 18
     }
   };
   private fireEnabled = true;
@@ -187,13 +195,20 @@ export class EnemySquadron {
           return this.tmpVecB.copy(formationOrigin).add(dir.multiplyScalar(80)); // spawn just ahead of destroyer toward player
         })()
       : this.tmpVecC.copy(player.root.position).add(this.tmpVecD.set(0, 0, spawnDistance)); // straight ahead, ~3s out
-    const formationOffsets = [
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(14, 2, -12),
-      new THREE.Vector3(-14, 2, -12),
-      new THREE.Vector3(22, 0, -22),
-      new THREE.Vector3(-22, 0, -22)
-    ];
+    const formationOffsets =
+      includeAlpha && count === 0 && interceptors >= 2
+        ? [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(16, 0, -12),
+            new THREE.Vector3(-16, 0, -12)
+          ]
+        : [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(14, 2, -12),
+            new THREE.Vector3(-14, 2, -12),
+            new THREE.Vector3(22, 0, -22),
+            new THREE.Vector3(-22, 0, -22)
+          ];
 
     for (let i = 0; i < total; i += 1) {
       const type = spawnTypes[i] ?? EnemyType.Fighter;
@@ -259,7 +274,10 @@ export class EnemySquadron {
         shieldBar,
         boundingRadius: baseRadius,
         hitFlash,
-        hitFlashTimer: 0
+        hitFlashTimer: 0,
+        idleUntil: 0,
+        focusLocked: false,
+        justArrived: false
       });
     }
   }
@@ -319,11 +337,16 @@ export class EnemySquadron {
 
     for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
       const enemy = this.enemies[i];
-      this.updateMovement(enemy, delta, playerPos, obstacles);
-      this.updateOrientation(enemy, playerPos);
+      const isIdle = enemy.idleUntil > now;
+      if (!isIdle) {
+        this.updateMovement(enemy, delta, playerPos, obstacles);
+        this.updateOrientation(enemy, playerPos);
+      }
       this.updateHealthBar(enemy, camera, playerPos);
       this.updateHitFlash(enemy, delta, camera);
-      this.tryShoot(enemy, playerPos, now);
+      if (!isIdle) {
+        this.tryShoot(enemy, playerPos, now);
+      }
     }
 
     this.updateBullets(delta);
@@ -352,7 +375,11 @@ export class EnemySquadron {
     // Approach phase from origin to baseTarget over approachDuration
     if (enemy.approachProgress < 1) {
       enemy.approachTarget.copy(baseTarget);
+      const prevProgress = enemy.approachProgress;
       enemy.approachProgress = Math.min(1, enemy.approachProgress + delta / this.approachDuration);
+      if (prevProgress < 1 && enemy.approachProgress >= 1) {
+        enemy.justArrived = true;
+      }
       const eased = THREE.MathUtils.smootherstep(enemy.approachProgress, 0, 1);
       enemy.root.position.lerpVectors(enemy.approachStart, enemy.approachTarget, eased);
       enemy.velocity.set(0, 0, 0);
@@ -412,9 +439,38 @@ export class EnemySquadron {
     enemy.root.quaternion.slerp(targetQuat, 0.12);
   }
 
+  triggerNewTypeFocus(
+    now: number,
+    focusMs: number,
+    pendingTypes: EnemyType[]
+  ): { type: EnemyType; lookTarget: THREE.Vector3; cameraPos: THREE.Vector3; cameraUp: THREE.Vector3 } | null {
+    for (const enemy of this.enemies) {
+      if (!pendingTypes.includes(enemy.type)) continue;
+      if (enemy.focusLocked || enemy.approachProgress < 1 || !enemy.justArrived) return null;
+
+      const focusUntil = now + focusMs;
+      const focusGroup = this.enemies;
+      focusGroup.forEach(member => {
+        member.focusLocked = true;
+        member.idleUntil = Math.max(member.idleUntil, focusUntil);
+        member.justArrived = false;
+        member.velocity.set(0, 0, 0);
+      });
+
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(enemy.root.quaternion).normalize();
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(enemy.root.quaternion).normalize();
+      const frontDistance = enemy.boundingRadius * 2.3;
+      const upOffset = enemy.boundingRadius * 0.22;
+      const cameraPos = enemy.root.position.clone().add(forward.multiplyScalar(frontDistance)).add(new THREE.Vector3(0, upOffset, 0));
+      return { type: enemy.type, lookTarget: enemy.root.position.clone(), cameraPos, cameraUp: up };
+    }
+    return null;
+  }
+
   private tryShoot(enemy: EnemyShip, playerPos: THREE.Vector3, now: number): void {
     if (!this.fireEnabled) return;
     if (enemy.approachProgress < 1) return; // don't fire until in position
+    if (enemy.type === EnemyType.AlphaWing && enemy.justArrived) return;
     if (now < this.waveFireHoldUntil) return; // pause fire for first seconds of each wave
     if (enemy.arrivalGraceUntil && now < enemy.arrivalGraceUntil) return; // grace window right after arrival
 
@@ -738,6 +794,11 @@ export class EnemySquadron {
     const list: EnemyType[] = [];
     if (includeAlpha) {
       list.push(EnemyType.AlphaWing);
+      const alphaInterceptCount = Math.min(2, interceptors);
+      for (let i = 0; i < alphaInterceptCount; i += 1) {
+        list.push(EnemyType.Interceptor);
+      }
+      interceptors = Math.max(0, interceptors - alphaInterceptCount);
       fighters = Math.max(0, fighters - 1);
     }
     for (let i = 0; i < fighters; i += 1) list.push(EnemyType.Fighter);
@@ -766,28 +827,98 @@ export class EnemySquadron {
         const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
         materials.forEach(mat => {
           if (type === EnemyType.AlphaWing) {
-            if ('color' in mat && mat.color) {
-              mat.color.setRGB(0.45, 0.45, 0.45); // lighter grey hull
+            const matName = 'name' in mat && mat.name ? mat.name.toLowerCase() : '';
+            const isGlass =
+              matName.includes('glass') ||
+              matName.includes('window') ||
+              matName.includes('cockpit') ||
+              matName.includes('canopy');
+            if (isGlass) {
+              if ('color' in mat && mat.color) {
+                mat.color.setHex(0x0b0d12);
+              }
+              if ('emissive' in mat) {
+                mat.emissive?.setHex(0x000000);
+                mat.emissiveIntensity = 0;
+              }
+              if ('transparent' in mat) {
+                (mat as THREE.MeshStandardMaterial).transparent = true;
+                (mat as THREE.MeshStandardMaterial).opacity = 0.55;
+              }
+            } else if ('color' in mat && mat.color) {
+              if ((mat as THREE.MeshStandardMaterial).map) {
+                mat.color.multiplyScalar(1.0);
+              } else {
+                mat.color.setRGB(0.46, 0.46, 0.46);
+              }
             }
-            if ('emissive' in mat) {
-              mat.emissive?.setHex(0x2b2b2b);
+            if ('emissive' in mat && !isGlass) {
+              mat.emissive?.setHex(0x333333);
               mat.emissiveIntensity = 0.28;
             }
           } else if (type === EnemyType.Interceptor) {
-            if ('color' in mat && mat.color) {
-              mat.color.setRGB(0.38, 0.38, 0.38); // lighter dark grey
+            const matName = 'name' in mat && mat.name ? mat.name.toLowerCase() : '';
+            const isGlass =
+              matName.includes('glass') ||
+              matName.includes('window') ||
+              matName.includes('cockpit') ||
+              matName.includes('canopy');
+            const hasMap = (mat as THREE.MeshStandardMaterial).map;
+            if (isGlass) {
+              if ('color' in mat && mat.color) {
+                mat.color.setHex(0x0a0c12);
+              }
+              if ('emissive' in mat) {
+                mat.emissive?.setHex(0x000000);
+                mat.emissiveIntensity = 0;
+              }
+              if ('transparent' in mat) {
+                (mat as THREE.MeshStandardMaterial).transparent = true;
+                (mat as THREE.MeshStandardMaterial).opacity = 0.45;
+              }
+            } else if ('color' in mat && mat.color) {
+              if (hasMap) {
+                mat.color.setRGB(1, 1, 1);
+              } else {
+                mat.color.setRGB(0.45, 0.45, 0.45); // lighter dark grey
+              }
             }
             if ('emissive' in mat) {
-              mat.emissive?.setHex(0x222222);
-              mat.emissiveIntensity = 0.22;
+              if (!isGlass && hasMap) {
+                mat.emissive?.setHex(0x000000);
+                mat.emissiveIntensity = 0;
+              } else if (!isGlass) {
+                mat.emissive?.setHex(0x222222);
+                mat.emissiveIntensity = 0.22;
+              }
+            }
+            if (hasMap) {
+              const stdMat = mat as THREE.MeshStandardMaterial;
+              stdMat.metalness = 0.2;
+              stdMat.roughness = 0.75;
             }
           } else {
+            const hasMap = (mat as THREE.MeshStandardMaterial).map;
             if ('color' in mat && mat.color) {
-              mat.color.multiplyScalar(0.7); // darken enemy hulls ~30%
+              if (hasMap) {
+                mat.color.setRGB(1, 1, 1);
+              } else {
+                mat.color.multiplyScalar(0.7); // darken enemy hulls ~30%
+              }
             }
             if ('emissive' in mat) {
-              mat.emissive?.copy((mat.color ?? new THREE.Color(0xffffff)).clone().multiplyScalar(0.6));
-              mat.emissiveIntensity = 0.6;
+              if (hasMap) {
+                mat.emissive?.setHex(0x000000);
+                mat.emissiveIntensity = 0;
+              } else {
+                mat.emissive?.copy((mat.color ?? new THREE.Color(0xffffff)).clone().multiplyScalar(0.6));
+                mat.emissiveIntensity = 0.6;
+              }
+            }
+            if (hasMap) {
+              const stdMat = mat as THREE.MeshStandardMaterial;
+              stdMat.metalness = 0.2;
+              stdMat.roughness = 0.75;
             }
           }
           if ('needsUpdate' in mat) {
@@ -838,3 +969,4 @@ export class EnemySquadron {
     return enemy.type;
   }
 }
+
