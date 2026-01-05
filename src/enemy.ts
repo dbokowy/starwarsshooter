@@ -79,7 +79,7 @@ export class EnemySquadron {
   private prefabs: Partial<Record<EnemyType, LoadedModel>> = {};
   private readonly archetypes: Record<EnemyType, EnemyArchetype> = {
     [EnemyType.Fighter]: {
-      modelPath: 'star_wars_tieln_fighter/scene.gltf',
+      modelPath: 'tie_fighter_-_star_wars/scene.gltf',
       muzzleOffsets: [new THREE.Vector3(1.8, -0.2, -2.6), new THREE.Vector3(-1.8, -0.2, -2.6)],
       bulletSpeed: 260,
       bulletLife: 4,
@@ -158,6 +158,9 @@ export class EnemySquadron {
   private readonly tmpVecB = new THREE.Vector3();
   private readonly tmpVecC = new THREE.Vector3();
   private readonly tmpVecD = new THREE.Vector3();
+  private readonly worldUp = new THREE.Vector3(0, 1, 0);
+  private readonly tmpQuatA = new THREE.Quaternion();
+  private readonly tmpQuatB = new THREE.Quaternion();
 
   constructor(
     private readonly loader: GLTFLoader,
@@ -330,7 +333,8 @@ export class EnemySquadron {
     obstacles: Obstacle[],
     now: number,
     onPlayerHit: (damageMultiplier?: number) => void,
-    onEnemyDestroyed: (type: EnemyType) => void
+    onEnemyDestroyed: (type: EnemyType) => void,
+    showBars: boolean
   ): void {
     if (!this.active) return;
     const playerPos = player.root.position;
@@ -342,7 +346,12 @@ export class EnemySquadron {
         this.updateMovement(enemy, delta, playerPos, obstacles);
         this.updateOrientation(enemy, playerPos);
       }
-      this.updateHealthBar(enemy, camera, playerPos);
+      if (showBars) {
+        this.updateHealthBar(enemy, camera, playerPos);
+      } else {
+        enemy.healthBar.group.visible = false;
+        if (enemy.shieldBar) enemy.shieldBar.group.visible = false;
+      }
       this.updateHitFlash(enemy, delta, camera);
       if (!isIdle) {
         this.tryShoot(enemy, playerPos, now);
@@ -659,11 +668,25 @@ export class EnemySquadron {
   private updateHealthBar(enemy: EnemyShip, camera: THREE.Camera, target: THREE.Vector3): void {
     const baseY = enemy.boundingRadius * 0.8 + 2.2;
     enemy.healthBar.group.position.setY(baseY);
-    enemy.healthBar.group.lookAt(target);
+    if (!camera.up.equals(this.worldUp)) {
+      this.tmpQuatA.copy(camera.quaternion);
+      this.tmpQuatB.copy(enemy.root.quaternion).invert();
+      enemy.healthBar.group.quaternion.copy(this.tmpQuatB.multiply(this.tmpQuatA));
+      enemy.healthBar.group.rotateY(Math.PI);
+    } else {
+      enemy.healthBar.group.lookAt(target);
+    }
     this.updateHealthFill(enemy);
     if (enemy.shieldBar) {
       enemy.shieldBar.group.position.setY(baseY + 1.4);
-      enemy.shieldBar.group.lookAt(target);
+      if (!camera.up.equals(this.worldUp)) {
+        this.tmpQuatA.copy(camera.quaternion);
+        this.tmpQuatB.copy(enemy.root.quaternion).invert();
+        enemy.shieldBar.group.quaternion.copy(this.tmpQuatB.multiply(this.tmpQuatA));
+        enemy.shieldBar.group.rotateY(Math.PI);
+      } else {
+        enemy.shieldBar.group.lookAt(target);
+      }
       this.updateShieldFill(enemy);
     }
   }
@@ -901,15 +924,15 @@ export class EnemySquadron {
             const hasMap = (mat as THREE.MeshStandardMaterial).map;
             if ('color' in mat && mat.color) {
               if (hasMap) {
-                mat.color.setRGB(1, 1, 1);
+                mat.color.setRGB(1.1, 1.1, 1.1);
               } else {
                 mat.color.multiplyScalar(0.7); // darken enemy hulls ~30%
               }
             }
             if ('emissive' in mat) {
               if (hasMap) {
-                mat.emissive?.setHex(0x000000);
-                mat.emissiveIntensity = 0;
+                mat.emissive?.setHex(0x1a1a1a);
+                mat.emissiveIntensity = 0.18;
               } else {
                 mat.emissive?.copy((mat.color ?? new THREE.Color(0xffffff)).clone().multiplyScalar(0.6));
                 mat.emissiveIntensity = 0.6;
@@ -967,6 +990,11 @@ export class EnemySquadron {
     this.destroyEnemy(enemy);
     this.enemies.splice(idx, 1);
     return enemy.type;
+  }
+
+  isEnemyArrivingByRoot(root: THREE.Object3D): boolean {
+    const enemy = this.enemies.find(e => e.root === root);
+    return enemy ? enemy.approachProgress < 1 : false;
   }
 }
 

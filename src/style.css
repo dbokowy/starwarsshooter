@@ -89,6 +89,14 @@ canvas {
   -webkit-mask-image: url('/assets/tie-interceptor-lineart.svg');
 }
 
+.enemy-icon.alpha {
+  align-self: center;
+  mask-image: url('/assets/tie-1-lineart.svg');
+  -webkit-mask-image: url('/assets/tie-1-lineart.svg');
+  transform: scale(1.2);
+  transform-origin: center;
+}
+
 .enemy-icon.down {
   background-color: #16304f;
   opacity: 0.35;

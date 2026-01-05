@@ -92,6 +92,7 @@ const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElement | null;
 const loadingTipEl = document.querySelector('.loading-tip') as HTMLElement | null;
 const LOADING_TIPS = [
+  'TIE Advanced x1 jest lepiej wyposażony niż standardowe myśliwce wroga - posiada tarcze, wzmocniony kadłub i ciężkie działa laserowe',
   'Przy dużej liczbie wrogów dobrze jest schować się w pasie asteroidów',
   'Podczas manewru beczki mysliwce wroga maja 70% mniej szans na trafienie X-Winga',
   'Statki wroga typu TIE Interceptor sa szybsze i zwrotniejsze od myśliwców TIE Fighter',
@@ -144,6 +145,7 @@ let arrivalFocusTarget: THREE.Vector3 | null = null;
 let arrivalFocusCamera: THREE.Vector3 | null = null;
 let arrivalFocusUp: THREE.Vector3 | null = null;
 let arrivalFocusQueued: { lookTarget: THREE.Vector3; cameraPos: THREE.Vector3; cameraUp: THREE.Vector3 } | null = null;
+let showEnemyBars = true;
 const seenEnemyTypes = new Set<EnemyType>();
 let pendingFocusTypes: EnemyType[] = [];
 const ARRIVAL_CAMERA_MS = 2500;
@@ -258,7 +260,7 @@ function update() {
   player.update(delta, inputController.state, { up: viewUp, right: viewRight, forward: viewForward });
   player.updateBullets(delta);
   if (gameStarted && !player.isDestroyed()) {
-    enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit, onEnemyDestroyed);
+    enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit, onEnemyDestroyed, showEnemyBars);
     const typeFocusTarget = pendingFocusTypes.length
       ? enemies.triggerNewTypeFocus(now, ALPHA_FOCUS_MS, pendingFocusTypes)
       : null;
@@ -280,6 +282,8 @@ function update() {
       arrivalFocusUntil = now + ALPHA_FOCUS_MS;
       arrivalFocusQueued = null;
     }
+    const isPresenting = arrivalFocusTarget && arrivalFocusCamera && now < arrivalFocusUntil;
+    showEnemyBars = !isPresenting;
   }
   updateCamera();
   player.updateFlames(elapsed * 2); // match prior timing scale
@@ -332,10 +336,10 @@ function updateCamera() {
       presentationKeyLight.visible = true;
       presentationFillLight.visible = true;
       presentationRimLight.visible = true;
-      presentationKeyLight.intensity = 2.2;
-      presentationFillLight.intensity = 0.4;
-      presentationRimLight.intensity = 1.1;
-      presentationKeyLight.position.copy(lookTarget).add(new THREE.Vector3(0, 220, 60));
+      presentationKeyLight.intensity = 3.2;
+      presentationFillLight.intensity = 0.2;
+      presentationRimLight.intensity = 0.7;
+      presentationKeyLight.position.copy(lookTarget).add(new THREE.Vector3(0, 320, 30));
       presentationKeyLight.target.position.copy(lookTarget);
       presentationFillLight.position.copy(lookTarget).add(new THREE.Vector3(120, 40, 80));
       presentationRimLight.position.copy(lookTarget).add(new THREE.Vector3(0, 60, -160));
@@ -557,6 +561,8 @@ function resetEnemyIcons(types: EnemyType[]): void {
     icon.className = 'enemy-icon';
     if (type === EnemyType.Interceptor) {
       icon.classList.add('interceptor');
+    } else if (type === EnemyType.AlphaWing) {
+      icon.classList.add('alpha');
     }
     enemyIconsEl.appendChild(icon);
   });
@@ -910,6 +916,9 @@ function handleAsteroidCollisions(onEnemyDestroyedCb: (type: EnemyType) => void)
     let collided = false;
     for (const root of enemyRoots) {
       if (root.userData.enemyType === EnemyType.AlphaWing) {
+        continue;
+      }
+      if (enemies.isEnemyArrivingByRoot(root)) {
         continue;
       }
       if (pos.distanceTo(root.position) <= ast.radius + 8) {
