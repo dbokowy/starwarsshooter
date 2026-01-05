@@ -34,6 +34,7 @@ export class PlayerController {
   private readonly rollDuration = 0.55;
   private rollDir = 1;
   private rollLatch = false;
+  private readonly rollDashSpeed = 140;
   private readonly rollCooldownMs = 1000;
   private rollSound: AudioBuffer | null = null;
   private rollAudio: THREE.Audio | null = null;
@@ -640,6 +641,11 @@ export class PlayerController {
       this.config.strafeSpeed * ((input.strafeRight ? 1 : 0) - (input.strafeLeft ? 1 : 0))
     );
     this.tmpMove.addScaledVector(this.tmpUp, this.config.strafeSpeed * ((input.up ? 1 : 0) - (input.down ? 1 : 0)));
+    if (this.rolling) {
+      const t = Math.min(1, this.rollTime / this.rollDuration);
+      const dash = Math.sin(Math.PI * t); // peak mid-roll
+      this.tmpMove.addScaledVector(this.tmpRight, this.rollDir * this.rollDashSpeed * dash);
+    }
 
     this.root.position.addScaledVector(this.tmpMove, delta);
 
