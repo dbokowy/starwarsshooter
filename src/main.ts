@@ -75,9 +75,10 @@ const tmpAimDir = new THREE.Vector3();
 const muzzleAverage = PLAYER_CONFIG.muzzleOffsets.reduce((acc, v) => acc.add(v), new THREE.Vector3()).multiplyScalar(1 / PLAYER_CONFIG.muzzleOffsets.length);
 let enemyFireSound: AudioBuffer | null = null;
 let enemyArrivalSound: AudioBuffer | null = null;
+let enemyHitSound: AudioBuffer | null = null;
 const setEnemyAudioIfReady = (): void => {
   if (enemyFireSound) {
-    enemies.setAudio(listener, enemyFireSound, enemyArrivalSound ?? undefined);
+    enemies.setAudio(listener, enemyFireSound, enemyArrivalSound ?? undefined, enemyHitSound ?? undefined);
   }
 };
 
@@ -214,7 +215,11 @@ async function init() {
   });
   audioLoader.load(`${ASSETS_PATH}/plasma_strike.mp3`, buffer => {
     player.setHitSound(buffer);
-    enemies.setAudio(listener, enemyFireSound ?? buffer, enemyArrivalSound ?? undefined, buffer);
+    enemyHitSound = buffer;
+    if (!enemyFireSound) {
+      enemyFireSound = buffer;
+    }
+    setEnemyAudioIfReady();
   });
   audioLoader.load(`${ASSETS_PATH}/shield_regeneration.mp3`, buffer => player.setShieldRegenSound(buffer));
   audioLoader.load(`${ASSETS_PATH}/xwing_boost.ogg`, buffer => player.setBoostSound(buffer));
