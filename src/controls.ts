@@ -140,20 +140,44 @@ function setupMobileControls(state: InputState, onShoot: () => void): CleanupFn 
   }
 
   if (boostBtn) {
+    let overboostTimeout: number | null = null;
+    const clearOverboost = () => {
+      if (overboostTimeout !== null) {
+        window.clearTimeout(overboostTimeout);
+        overboostTimeout = null;
+      }
+      state.overboost = false;
+    };
+
     cleanups.push(
-      bindHoldButtonWithDoubleTap(
+      bindToggleButtonWithDoubleTap(
         boostBtn,
         active => {
           state.boost = active;
-          if (!active) state.overboost = false;
+          if (!active) clearOverboost();
         },
         () => {
+          state.boost = true;
           state.overboost = true;
+          if (overboostTimeout !== null) {
+            window.clearTimeout(overboostTimeout);
+          }
+          overboostTimeout = window.setTimeout(() => {
+            state.overboost = false;
+            overboostTimeout = null;
+          }, 1200);
         }
       )
     );
-  }
 
+    cleanups.push(() => {
+      if (overboostTimeout !== null) {
+        window.clearTimeout(overboostTimeout);
+        overboostTimeout = null;
+      }
+      state.overboost = false;
+    });
+  }
   if (rollLeftBtn) {
     cleanups.push(bindTapButton(rollLeftBtn, () => {
       state.rollLeft = true;
@@ -274,41 +298,51 @@ function bindHoldButton(button: HTMLElement, onChange: (active: boolean) => void
   };
 }
 
-function bindHoldButtonWithDoubleTap(button: HTMLElement, onChange: (active: boolean) => void, onDoubleTap: () => void): CleanupFn {
+function bindToggleButtonWithDoubleTap(
+  button: HTMLElement,
+  onToggle: (active: boolean) => void,
+  onDoubleTap: () => void
+): CleanupFn {
+  let active = false;
   let lastTapAt = -Infinity;
   const doubleTapMs = 320;
 
-  const activate = (event: PointerEvent) => {
+  const onDown = (event: PointerEvent) => {
     event.preventDefault();
     button.setPointerCapture?.(event.pointerId);
     const now = performance.now();
     if (now - lastTapAt <= doubleTapMs) {
+      if (!active) {
+        active = true;
+        onToggle(true);
+      }
       onDoubleTap();
+    } else {
+      active = !active;
+      onToggle(active);
     }
     lastTapAt = now;
-    onChange(true);
   };
 
-  const deactivate = (event: PointerEvent) => {
+  const onUp = (event: PointerEvent) => {
     event.preventDefault();
     button.releasePointerCapture?.(event.pointerId);
-    onChange(false);
   };
 
-  button.addEventListener('pointerdown', activate);
-  button.addEventListener('pointerup', deactivate);
-  button.addEventListener('pointerleave', deactivate);
-  button.addEventListener('pointercancel', deactivate);
+  button.addEventListener('pointerdown', onDown);
+  button.addEventListener('pointerup', onUp);
+  button.addEventListener('pointerleave', onUp);
+  button.addEventListener('pointercancel', onUp);
 
   return () => {
-    button.removeEventListener('pointerdown', activate);
-    button.removeEventListener('pointerup', deactivate);
-    button.removeEventListener('pointerleave', deactivate);
-    button.removeEventListener('pointercancel', deactivate);
-    onChange(false);
+    button.removeEventListener('pointerdown', onDown);
+    button.removeEventListener('pointerup', onUp);
+    button.removeEventListener('pointerleave', onUp);
+    button.removeEventListener('pointercancel', onUp);
+    active = false;
+    onToggle(false);
   };
 }
-
 function bindTapButton(button: HTMLElement, onTap: () => void): CleanupFn {
   const handler = (event: PointerEvent) => {
     event.preventDefault();
@@ -383,3 +417,4 @@ function resetState(state: InputState): void {
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
+
