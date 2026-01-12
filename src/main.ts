@@ -1,4 +1,4 @@
-import './style.css';
+﻿import './style.css';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { AudioLoader, AudioListener } from 'three';
@@ -93,11 +93,11 @@ const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElement | null;
 const loadingTipEl = document.querySelector('.loading-tip') as HTMLElement | null;
 const LOADING_TIPS = [
-  'TIE Advanced x1 jest lepiej wyposażony niż standardowe myśliwce wroga - posiada tarcze, wzmocniony kadłub i ciężkie działa laserowe',
-  'Przy dużej liczbie wrogów dobrze jest schować się w pasie asteroidów',
+  'TIE Advanced x1 jest lepiej wyposaĹĽony niĹĽ standardowe myĹ›liwce wroga - posiada tarcze, wzmocniony kadĹ‚ub i ciÄ™ĹĽkie dziaĹ‚a laserowe',
+  'Przy duĹĽej liczbie wrogĂłw dobrze jest schowaÄ‡ siÄ™ w pasie asteroidĂłw',
   'Podczas manewru beczki mysliwce wroga maja 70% mniej szans na trafienie X-Winga',
-  'Statki wroga typu TIE Interceptor sa szybsze i zwrotniejsze od myśliwców TIE Fighter',
-  'Dwukrotne naciśnięcie klawisza przyspieszenia aktywuje krótkotrwały „boost” prędkości',
+  'Statki wroga typu TIE Interceptor sa szybsze i zwrotniejsze od myĹ›liwcĂłw TIE Fighter',
+  'Dwukrotne naciĹ›niÄ™cie klawisza przyspieszenia aktywuje krĂłtkotrwaĹ‚y â€žboostâ€ť prÄ™dkoĹ›ci',
 ];
 const MIN_LOADING_MS = 4000;
 let loadingShownAt = performance.now();
@@ -270,7 +270,10 @@ function update() {
   player.update(delta, inputController.state, { up: viewUp, right: viewRight, forward: viewForward });
   player.updateBullets(delta);
   if (gameStarted && !player.isDestroyed()) {
-    enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit, onEnemyDestroyed, showEnemyBars);
+    enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit, onEnemyDestroyed, showEnemyBars);
+    if (enemies.checkPlayerCollision(player)) {
+      handlePlayerDestroyed();
+    }
     const typeFocusTarget = pendingFocusTypes.length
       ? enemies.triggerNewTypeFocus(now, ALPHA_FOCUS_MS, pendingFocusTypes)
       : null;
@@ -595,6 +598,10 @@ function markEnemyDestroyed(type: EnemyType): void {
 function onEnemyDestroyed(type: EnemyType): void {
   markEnemyDestroyed(type);
   if (enemies.getCount() === 0 && !winPending && !player.isDestroyed()) {
+    if (wave >= 6) {
+      handleVictory();
+      return;
+    }
     advanceWave();
   }
 }
@@ -787,8 +794,12 @@ async function advanceWave(): Promise<void> {
     nextWaveBtn.textContent = 'Nastepna fala: AUTO';
     nextWaveBtn.classList.remove('active');
   }
+  if (nextWave > 6) {
+    handleVictory();
+    return;
+  }
 
-  wave = Math.max(1, Math.min(6, nextWave));
+  wave = Math.max(1, nextWave);
   if (wave === 1) {
     scheduleNextWave(1); // 1 Fighter
   } else if (wave === 2) {
@@ -801,8 +812,6 @@ async function advanceWave(): Promise<void> {
     scheduleNextWave(2, 2); // 2 Fighters + 2 Interceptors
   } else if (wave === 6) {
     scheduleNextWave(0, 2, true); // TIE-1 (Alpha) + 2 Interceptors
-  } else {
-    handleVictory();
   }
 }
 
@@ -867,11 +876,11 @@ async function spawnAsteroids(count: number): Promise<void> {
     const roll = Math.random();
     let sizeRand: number;
     if (roll < 0.9) {
-      sizeRand = THREE.MathUtils.randFloat(0.1, 2.0); // 90%: 10%–200% X-wing
+      sizeRand = THREE.MathUtils.randFloat(0.1, 2.0); // 90%: 10%â€“200% X-wing
     } else if (roll < 0.98) {
-      sizeRand = THREE.MathUtils.randFloat(2.0, 4.0); // 8%: 200%–400%
+      sizeRand = THREE.MathUtils.randFloat(2.0, 4.0); // 8%: 200%â€“400%
     } else {
-      sizeRand = THREE.MathUtils.randFloat(4.0, 8.0); // 2%: 400%–800%
+      sizeRand = THREE.MathUtils.randFloat(4.0, 8.0); // 2%: 400%â€“800%
     }
     const targetRadius = player.collisionRadius * sizeRand;
     const scale = prefab.radius > 0 ? targetRadius / prefab.radius : 1;
@@ -1026,3 +1035,4 @@ async function restartGame(): Promise<void> {
   resetEnemyIcons([]);
   startGame();
 }
+

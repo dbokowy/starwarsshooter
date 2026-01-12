@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { Bullet } from './types.js';
@@ -367,6 +367,20 @@ export class EnemySquadron {
     this.updateBullets(delta);
     this.handleEnemyHitsPlayer(player, onPlayerHit);
     this.handlePlayerHitsEnemies(player, onEnemyDestroyed);
+  }
+
+  checkPlayerCollision(player: PlayerController): EnemyType | null {
+    const playerPos = player.root.position;
+    for (let i = this.enemies.length - 1; i >= 0; i -= 1) {
+      const enemy = this.enemies[i];
+      const hitRadius = enemy.boundingRadius + player.collisionRadius;
+      if (enemy.root.position.distanceTo(playerPos) <= hitRadius) {
+        this.destroyEnemy(enemy);
+        this.enemies.splice(i, 1);
+        return enemy.type;
+      }
+    }
+    return null;
   }
 
   private updateMovement(enemy: EnemyShip, delta: number, playerPos: THREE.Vector3, obstacles: Obstacle[]): void {
@@ -1006,4 +1020,5 @@ export class EnemySquadron {
     return enemy ? enemy.approachProgress < 1 : false;
   }
 }
+
 
