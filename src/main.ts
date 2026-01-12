@@ -93,11 +93,11 @@ const loadingEl = document.getElementById('loading') as HTMLElement | null;
 const loadingBarFill = document.querySelector('.loading-bar-fill') as HTMLElement | null;
 const loadingTipEl = document.querySelector('.loading-tip') as HTMLElement | null;
 const LOADING_TIPS = [
-  'TIE Advanced x1 jest lepiej wyposaĹĽony niĹĽ standardowe myĹ›liwce wroga - posiada tarcze, wzmocniony kadĹ‚ub i ciÄ™ĹĽkie dziaĹ‚a laserowe',
-  'Przy duĹĽej liczbie wrogĂłw dobrze jest schowaÄ‡ siÄ™ w pasie asteroidĂłw',
-  'Podczas manewru beczki mysliwce wroga maja 70% mniej szans na trafienie X-Winga',
-  'Statki wroga typu TIE Interceptor sa szybsze i zwrotniejsze od myĹ›liwcĂłw TIE Fighter',
-  'Dwukrotne naciĹ›niÄ™cie klawisza przyspieszenia aktywuje krĂłtkotrwaĹ‚y â€žboostâ€ť prÄ™dkoĹ›ci',
+  'TIE Advanced x1 jest lepiej wyposażony niż standardowe myśliwce wroga - posiada tarcze, wzmocniony kadłub i ciężkie działa laserowe',
+  'Przy dużej liczbie wrogów dobrze jest schować się w pasie asteroid',
+  'Podczas manewru beczki myśliwce wroga mają 70% mniej szans na trafienie X-Winga',
+  'Statki wroga typu TIE Interceptor są szybsze i zwrotniejsze od myśliwców TIE Fighter',
+  'Dwukrotne naciśnięcie klawisza przyspieszenia aktywuje "boost" prędkości',
 ];
 const MIN_LOADING_MS = 4000;
 let loadingShownAt = performance.now();
@@ -270,7 +270,8 @@ function update() {
   player.update(delta, inputController.state, { up: viewUp, right: viewRight, forward: viewForward });
   player.updateBullets(delta);
   if (gameStarted && !player.isDestroyed()) {
-    enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit, onEnemyDestroyed, showEnemyBars);
+    enemies.update(delta, player, camera, buildObstacles(), now, onPlayerHit, onEnemyDestroyed, showEnemyBars);
+
     if (enemies.checkPlayerCollision(player)) {
       handlePlayerDestroyed();
     }
